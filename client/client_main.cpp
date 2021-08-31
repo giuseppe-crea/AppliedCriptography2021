@@ -18,12 +18,6 @@ struct message{
 };
 
 
-// new types definition
-
-typedef char EVP_PKEY*[512];
-typedef char aes_key[16];
-typedef int certificate;
-
 // constant protocol variables
 
 const int chat_request_code = 301;
@@ -64,24 +58,14 @@ void rsa_encrypt(EVP_PKEY* pub_key,char* pt,char* ct,int length);
 void rsa_decrypt(EVP_PKEY* pr_key,char* pt,char* ct,int length);
 
 
-void aes_gcm_encrypt(aes_key key,string pt,string* ct,long double* tag);
-void aes_gcm_decrypt(aes_key key,string ct,string* pt,long double tag);
+void aes_gcm_encrypt(unsigned char* key,string pt,string* ct,long double* tag);
+void aes_gcm_decrypt(unsigned char* key,string ct,string* pt,long double tag);
 
 // server connection info & utilities
 
 const int server_addres = 1;
 const int server_port = 1;
 
-/*certificate request_certificate(int sv_connection);
-
-void request_sv_key(int sv_connection,EVP_PKEY* ca_pub_key,EVP_PKEY*& sv_pub_key){
-	certificate c = request_certificate(sv_connection);
-
-	EVP_PKEY* sv_key;
-
-	rsa_decrypt(ca_pub_key,(char*)&sv_key,(char*)&c,sizeof(EVP_PKEY*));
-
-};*/
 
 void send(int socket_out,message m);
 
@@ -99,7 +83,7 @@ void pt_concat(char* pt, char* buffer, int dim){
 }
 
 // function to verify signature
-bool verify_sign(EVP_PKEY* sv_pub_key, int* sv_point, int na, char* sv_sign, int sign_size){
+bool verify_sign(EVP_PKEY* sv_pub_key, EVP_PKEY* sv_dh_pubkey, int na, char* sv_sign, int sign_size){
 	int ret;
 
 	// create the signature context:
@@ -110,11 +94,14 @@ bool verify_sign(EVP_PKEY* sv_pub_key, int* sv_point, int na, char* sv_sign, int
 	if(ret == 0){ cerr << "Error: EVP_VerifyInit returned " << ret << "\n"; exit(1); }
 
 	//verifies the signature
-	int buffer[3];
-	buffer[0] = sv_point[0];
-	buffer[1] = sv_point[1];
-	buffer[2] = na;
-	ret = EVP_VerifyUpdate(md_ctx, (char*)&buffer, 3*sizeof(int));  
+	int buffer_dim = sizeof(int)+sizeof(EVP_PKEY);
+
+	char buffer[buffer_dim];
+	
+	extract_dim(buffer, (char*) sv_dh_pubkey,sizeof(EVP_PKEY));
+	extract_dim(buffer, (char*) &na, sizeof(int));
+
+	ret = EVP_VerifyUpdate(md_ctx, (char*)&buffer, buffer_dim);  
 	if(ret == 0){ cerr << "Error: EVP_VerifyUpdate returned " << ret << "\n"; exit(1); }
 	ret = EVP_VerifyFinal(md_ctx, sv_sign, sign_size, sv_pub_key);
 	if(ret == -1){ // it is 0 if invalid signature, -1 if some other error, 1 if success.
@@ -144,20 +131,29 @@ bool signature(EVP_KEY* cl_pr_key, char* pt, unsigned char** sign, int length, u
 
 	//verifies the signature
 	ret = EVP_SignInit(md_ctx, md);
-	if(ret == 0){ cerr << "Error: EVP_SignInit returned " << ret << "\n"; exit(1); }
+
+	if(ret == 0){ 
+		cerr << "Error: EVP_SignInit returned " << ret << "\n"; exit(1); 
+	}
+
 	ret = EVP_SignUpdate(md_ctx, pt, length);
-	if(ret == 0){ cerr << "Error: EVP_SignUpdate returned " << ret << "\n"; exit(1); }
+
+	if(ret == 0){ 
+		cerr << "Error: EVP_SignUpdate returned " << ret << "\n"; exit(1); 
+	}
+
 	ret = EVP_SignFinal(md_ctx, *sign, sign_size, cl_pr_key);
-	if(ret == 0){ cerr << "Error: EVP_SignFinal returned " << ret << "\n"; exit(1); }
-   }
-   else if (ret==1){
-	   return true;
-   }
+	
+	if(ret == 0){ 
+		cerr << "Error: EVP_SignFinal returned " << ret << "\n"; exit(1); 
+	}
+	
+	return true;
 }
 
 // authentication
 
-void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_out, aes_key* sv_session_key, X509_STORE* store){
+void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_out, unsigned char** sv_session_key, X509_STORE* store){
 	*socket_out = open_connection(socket_in);
 	//generates random nonce to be sent
 	int na = random();
@@ -165,19 +161,34 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 	//waits for a message from the server
 	message m = receive(socket_in);
 	char* sv_sign;
-	int sv_point[2];
+	long sv_pem_size;
+	BIO* sv_pem = BIO_new(BIO_s_mem());
+	EVP_PKEY* sv_dh_pubkey = NULL;
 	int ns;
 	int size;
 	int sign_size;
 	X509* serv_cert = new X509;
 
 	//TODO: elliptic curve, generate key (diffie-hellman), random
+
+	long read_dim = 0; // counts the number of bytes read from message
+
 	extract_dim((char*)&m,(char*)&size,sizeof(int));
-	extract_dim((char*)(&m)+4,(char*)&sv_point,2*sizeof(int));
-	extract_dim((char*)(&m)+12,(char*)&sign_size,sizeof(int));
+	read_dim += sizeof(int);
+	extract_dim((char*)(&m)+read_dim,(char*)&sv_pem_size,sizeof(long));	
+	read_dim += sizeof(long);
+	BIO_write(sv_pem,(void*)(&m)+read_dim,sv_pem_size);
+	read_dim += sv_pem_size;
+	extract_dim((char*)(&m)+read_dim,(char*)&sign_size,sizeof(int));
+	read_dim += sizeof(int);
 	sv_sign = malloc(sign_size);
-	extract_dim((char*)(&m)+16,sv_sign,sign_size));
-	extract_dim((char*)(&m)+16+sign_size,(char*)serv_cert,size-16-sign_size);
+	extract_dim((char*)(&m)+read_dim,sv_sign,sign_size);
+	read_dim += sign_size;
+	extract_dim((char*)(&m)+read_dim,(char*)serv_cert,size-read_dim);
+
+	// extracts diffie hellmann server public key received in PEM format
+
+	sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
 
 	// creates and definies the context used to verify the server certificate with the CA certificate
   	X509_STORE_CTX* ctx = X509_STORE_CTX_new();
@@ -187,29 +198,89 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 		EVP_PKEY* sv_pub_key = X509_get_pubkey(serv_cert);
 
 		//verifies the signature and generates a session key
-		if(verify_sign(sv_pub_key, sv_point, na, sv_sign, sign_size)){
-			int a = random();
-			int peer_point[2];
-			int key_point[2];
-			elliptic_curve(a, P, &peer_point);
+		if(verify_sign(sv_pub_key, sv_dh_pubkey, na, sv_sign, sign_size)){
+			// load elliptic curve parameters
+			EVP_PKEY* dh_params;
+
+			EVP_PKEY_CTX* pctx;
+			pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
+
+			if(pctx == NULL){
+				error(DH_INIZIALIZATION);
+			}
+
+			EVP_PKEY_paramgen_init(pctx);
+			EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx,NID_X9_62_prime256v1);
+			EVP_PKEY_paramgen(pctx,&dh_params);
+			EVP_PKEY_CTX_free(pctx);
+
+			// key generation
+
+			EVP_PKEY_CTX* kg_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+			EVP_PKEY* peer_dh_prvkey = NULL;
+			EVP_PKEY_keygen_init(kg_ctx);
+			EVP_PKEY_keygen(kg_ctx,&peer_dh_prvkey);
+			EVP_PKEY_CTX_free(kg_ctx);
+
+			// save public key in pem format in a memory BIO
+
+			BIO* peer_dh_prvkey_pem = BIO_new(BIO_s_mem());
+			int ret = PEM_write_bio_PUBKEY(peer_dh_prvkey_pem,peer_dh_prvkey);
+
+			if(ret==0)
+				error(PEM_SERIALIZATION);
+
+			// send the public key in pem format in clear 
+			// and signed in combination with received nonce 
+
+			char* pem_buffer;
+			long pem_dim = BIO_get_mem_data(peer_dh_prvkey_pem,&pem_buffer);
+
 			message m_a; 
-			char* pt[3*sizeof(int)];
-			char* buffer = (char*) &peer_point;
-			pt_concat(pt, buffer, 2*sizeof(int));
-			pt_concat(m_a.ct, buffer, 2*sizeof(int));
-			buffer = (char*) &ns;
+			char* pt = new char[pem_dim+sizeof(int)];
+		
+			extract_dim(pem_buffer, pt, pem_dim);
+			extract_dim(pem_buffer, m_a.ct, pem_dim);
+			char buffer = (char*) &ns;
 			pt_concat(pt,buffer,sizeof(int));
 			char* a_sign;
 			unsigned int a_sign_size;
-			// signature of nonce and client point of elliptic curve
+			// signature of nonce and pem
 			signature(cl_pr_key,pt,&a_sign,pt.length,&a_sign_size);
 			pt_concat(m_a.ct, a_sign, a_sign_size);
 			send(m_a);
 			free(sv_sign);
 			free(a_sign);
-			// session key computation
-			elliptic_curve(a, sv_point, &key_point);
-			*sv_session_key = generate_key(key_point);
+
+			// session key derivation
+			EVP_PKEY_CTX* kd_ctx;
+			EVP_PKEY_derive_init(kd_ctx);
+
+			ret = EVP_PKEY_derive_set_peer(kd_ctx,sv_dh_pubkey);
+
+			if(ret == 0){
+				error(KEY_DERIVATION);
+			}
+
+			unsigned char* secret;
+
+			size_t secret_length;
+			EVP_PKEY_derive(kd_ctx,NULL,&secret_length);
+
+			// deriving
+			secret = (unsigned char*)malloc(secret_length);
+			EVP_PKEY_derive(kd_ctx,secret,&secret_length);
+
+			// hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
+			EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
+
+
+			*sv_session_key = new unsigned char[32];
+			long sv_session_key_length;
+			EVP_DigestInit(hash_ctx,EVP_sha256());
+			EVP_DigestUpdate(hash_ctx,secret,secret_length);
+			EVP_DigestFinal(hash_ctx,*sv_session_key,&sv_session_key_length);
+
 		}
 	}
 };
@@ -221,7 +292,7 @@ void error(int code);
 
 // functions handling different messages
 
-void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned int* counterAS,aes_key sv_key){
+void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
 
 	counter_mtx->lock();
@@ -247,7 +318,7 @@ void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned i
 
 };
 
-void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,aes_key sv_key){
+void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
 
@@ -273,7 +344,7 @@ void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,aes_
 };
 
 
-void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,aes_key sv_key){
+void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
 
@@ -297,7 +368,7 @@ void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,aes_key sv
 
 
 };
-void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,aes_key sv_key){
+void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
 
@@ -321,7 +392,7 @@ void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,aes_key 
 
 };
 
-void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned int* counterAS,unsigned int* counterAB, aes_key sv_key,aes_key peer_key){
+void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
 	counter_mtx->lock();
 
 	message m_to_peer;
@@ -390,13 +461,13 @@ int main(){
 	int socket_out;
 
 	EVP_PKEY* sv_pub_key;
-	aes_key peer_session_key;
-	aes_key sv_session_key;
+	unsigned char* peer_session_key;
+	unsigned char* sv_session_key;
 
 	bool chatting = false;
 	string peer_id;
 	
-	auth(cl_pr_key,cl_pub_key,socket_in,&socket_out,&sv_session_key);
+	auth(cl_pr_key,cl_pub_key,socket_in,&socket_out,sv_session_key);
 
 	mutex counter_mtx;
 	static unsigned int counterAS = 0;
@@ -422,7 +493,7 @@ int main(){
 				string recipient = input_buffer.substr(5,input_buffer.find(' '));
 				ss << recipient;
 				ss >> recipient_id;
-				chat_request(socket_out,recipient_id,&counter_mtx,&counterAS,sv_session_key,&peer_session_key);
+				chat_request(socket_out,recipient_id,&counter_mtx,&counterAS,sv_session_key,peer_session_key);
 			}
 		}
 		else if (first_word.compare(logout_cmd))
