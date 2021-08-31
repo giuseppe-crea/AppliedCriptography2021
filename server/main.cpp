@@ -12,6 +12,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <map>
+#include <ClientElement.hpp>
 
 #define PORT "9034"   // port we're listening on
 
@@ -27,6 +29,7 @@ void *get_in_addr(struct sockaddr *sa)
 
 int main(void)
 {
+    std::map<int, ClientElement*> connectedClients;
     fd_set master;    // master file descriptor list
     fd_set read_fds;  // temp file descriptor list for select()
     int fdmax;        // maximum file descriptor number
@@ -48,6 +51,8 @@ int main(void)
 
     FD_ZERO(&master);    // clear the master and temp sets
     FD_ZERO(&read_fds);
+
+    //TODO: Store
 
 	// get us a socket and bind it
 	memset(&hints, 0, sizeof hints);
@@ -127,6 +132,10 @@ int main(void)
 								get_in_addr((struct sockaddr*)&remoteaddr),
 								remoteIP, INET6_ADDRSTRLEN),
 							newfd);
+                        // create a new client element for this client
+                        ClientElement *newClient = new ClientElement();
+                        // add it to the client-socket map
+                        connectedClients.insert(std::pair<int, ClientElement*>(newfd, newClient));
                     }
                 } else {
                     // handle data from a client
@@ -139,6 +148,13 @@ int main(void)
                             perror("recv");
                         }
                         close(i); // bye!
+                        // removing from connectedClients and deleting the client object
+                        auto tmpIterator = connectedClients.find(i);
+                        if(tmpIterator != connectedClients.end())
+                        {
+                            delete(tmpIterator->second);
+                            connectedClients.erase(tmpIterator);
+                        }
                         FD_CLR(i, &master); // remove from master set
                     } else {
                         // we got some data from a client
