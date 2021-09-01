@@ -1,7 +1,7 @@
 #include <iostream>
 #include <thread>
 #include <mutex>
-#include <string>
+#include <string.h>
 #include <sstream>
 #include <openssl/x509_vfy.h>
 #include <openssl/evp.h>
@@ -52,41 +52,22 @@ const string list_request_cmd = ":list";
 // const for signatures in auth
 const EVP_MD* md = EVP_sha256();
 
-// encryption utilities
-
-void rsa_encrypt(EVP_PKEY* pub_key,char* pt,char* ct,int length);
-void rsa_decrypt(EVP_PKEY* pr_key,char* pt,char* ct,int length);
-
-
+// TODO: encryption
 void aes_gcm_encrypt(unsigned char* key,string pt,string* ct,long double* tag);
 void aes_gcm_decrypt(unsigned char* key,string ct,string* pt,long double tag);
 
 // server connection info & utilities
-
 const int server_addres = 1;
 const int server_port = 1;
 
-
+// function to send message
 void send(int socket_out,message m);
 
-// functions to concatenate objects in the message plaintext
-void pt_concat(string& pt, char* buffer, int dim){
-	for (int i = 0; i < dim ; i++){
-		pt.push_back(*(buffer+i));
-	}
-}
-
-void pt_concat(char* pt, char* buffer, int dim){
-	for (int i = 0; i < dim ; i++){
-		pt[i]=buffer[i];
-	}
-}
-
 // function to verify signature
-bool verify_sign(EVP_PKEY* sv_pub_key, EVP_PKEY* sv_dh_pubkey, int na, char* sv_sign, int sign_size){
+bool verify_sign(EVP_PKEY* pub_key, char* data, int n, long data_dim, char* sign, int sign_dim){
 	int ret;
 
-	// create the signature context:
+	// creates the signature context
 	EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
 	if(!md_ctx){ cerr << "Error: EVP_MD_CTX_new returned NULL\n"; exit(1); }
 
@@ -94,16 +75,18 @@ bool verify_sign(EVP_PKEY* sv_pub_key, EVP_PKEY* sv_dh_pubkey, int na, char* sv_
 	if(ret == 0){ cerr << "Error: EVP_VerifyInit returned " << ret << "\n"; exit(1); }
 
 	//verifies the signature
-	int buffer_dim = sizeof(int)+sizeof(EVP_PKEY);
+	int buffer_dim = sizeof(int)+data_dim;
 
 	char buffer[buffer_dim];
 	
-	extract_dim(buffer, (char*) sv_dh_pubkey,sizeof(EVP_PKEY));
-	extract_dim(buffer, (char*) &na, sizeof(int));
+	//takes the data and the nonce that have been signed
+	memcpy((char*) data, buffer, data_dim));
+	memcpy((char*) &n, buffer, sizeof(int));
 
+	//actual signature verification
 	ret = EVP_VerifyUpdate(md_ctx, (char*)&buffer, buffer_dim);  
 	if(ret == 0){ cerr << "Error: EVP_VerifyUpdate returned " << ret << "\n"; exit(1); }
-	ret = EVP_VerifyFinal(md_ctx, sv_sign, sign_size, sv_pub_key);
+	ret = EVP_VerifyFinal(md_ctx, sign, sign_dim, pub_key);
 	if(ret == -1){ // it is 0 if invalid signature, -1 if some other error, 1 if success.
 		cerr << "Error: EVP_VerifyFinal returned " << ret << " (invalid signature?)\n";
 		exit(1);
@@ -124,42 +107,46 @@ bool signature(EVP_KEY* cl_pr_key, char* pt, unsigned char** sign, int length, u
 	EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
 	if(!md_ctx){ cerr << "Error: EVP_MD_CTX_new returned NULL\n"; exit(1); }
 
+	//allocates the signature
 	*sign = (unsigned char*)malloc(EVP_PKEY_size(cl_pr_key));
 
 	ret = EVP_VerifyInit(md_ctx, md);
 	if(ret == 0){ cerr << "Error: EVP_VerifyInit returned " << ret << "\n"; exit(1); }
 
-	//verifies the signature
+	//computes the signature
 	ret = EVP_SignInit(md_ctx, md);
 
 	if(ret == 0){ 
 		cerr << "Error: EVP_SignInit returned " << ret << "\n"; exit(1); 
 	}
-
 	ret = EVP_SignUpdate(md_ctx, pt, length);
 
 	if(ret == 0){ 
 		cerr << "Error: EVP_SignUpdate returned " << ret << "\n"; exit(1); 
 	}
-
 	ret = EVP_SignFinal(md_ctx, *sign, sign_size, cl_pr_key);
 	
 	if(ret == 0){ 
 		cerr << "Error: EVP_SignFinal returned " << ret << "\n"; exit(1); 
 	}
-	
 	return true;
 }
 
-// authentication
+// authentication between client and server
 
 void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_out, unsigned char** sv_session_key, X509_STORE* store){
+	//opens connection
 	*socket_out = open_connection(socket_in);
+	//TODO: random()
 	//generates random nonce to be sent
 	int na = random();
+	//TODO: message to the server with client ID and nonce
+	//sends nonce in the clear
 	send(*socket_out, na);
 	//waits for a message from the server
 	message m = receive(socket_in);
+
+	//saves certificate from the server
 	char* sv_sign;
 	long sv_pem_size;
 	BIO* sv_pem = BIO_new(BIO_s_mem());
@@ -169,26 +156,25 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 	int sign_size;
 	X509* serv_cert = new X509;
 
-	//TODO: elliptic curve, generate key (diffie-hellman), random
-
 	long read_dim = 0; // counts the number of bytes read from message
 
-	extract_dim((char*)&m,(char*)&size,sizeof(int));
+	memcpy(&size, &m, sizeof(int));
 	read_dim += sizeof(int);
-	extract_dim((char*)(&m)+read_dim,(char*)&sv_pem_size,sizeof(long));	
+	mempcy(&sv_pem_size, (&m)+read_dim, sizeof(long));	
 	read_dim += sizeof(long);
 	BIO_write(sv_pem,(void*)(&m)+read_dim,sv_pem_size);
 	read_dim += sv_pem_size;
-	extract_dim((char*)(&m)+read_dim,(char*)&sign_size,sizeof(int));
+	memcpy(&sign_size, (&m)+read_dim, sizeof(int));
 	read_dim += sizeof(int);
 	sv_sign = malloc(sign_size);
-	extract_dim((char*)(&m)+read_dim,sv_sign,sign_size);
+	memcpy(sv_sign, (&m)+read_dim, sign_size);
 	read_dim += sign_size;
-	extract_dim((char*)(&m)+read_dim,(char*)serv_cert,size-read_dim);
+	memcpy(serv_cert, (&m)+read_dim, size-read_dim);
 
 	// extracts diffie hellmann server public key received in PEM format
-
 	sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
+	char* sv_pem_buffer;
+	long sv_pem_dim = BIO_get_mem_data(sv_pem,&sv_pem_buffer);
 
 	// creates and definies the context used to verify the server certificate with the CA certificate
   	X509_STORE_CTX* ctx = X509_STORE_CTX_new();
@@ -198,7 +184,8 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 		EVP_PKEY* sv_pub_key = X509_get_pubkey(serv_cert);
 
 		//verifies the signature and generates a session key
-		if(verify_sign(sv_pub_key, sv_dh_pubkey, na, sv_sign, sign_size)){
+		if(verify_sign(sv_pub_key, sv_pem_buffer, na, sv_pem_dim, sv_sign, sign_size)){
+			//TODO: elliptic curve functions: dh key generation and session key derivation
 			// load elliptic curve parameters
 			EVP_PKEY* dh_params;
 
@@ -215,7 +202,6 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 			EVP_PKEY_CTX_free(pctx);
 
 			// key generation
-
 			EVP_PKEY_CTX* kg_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
 			EVP_PKEY* peer_dh_prvkey = NULL;
 			EVP_PKEY_keygen_init(kg_ctx);
@@ -223,37 +209,35 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 			EVP_PKEY_CTX_free(kg_ctx);
 
 			// save public key in pem format in a memory BIO
-
-			BIO* peer_dh_prvkey_pem = BIO_new(BIO_s_mem());
-			int ret = PEM_write_bio_PUBKEY(peer_dh_prvkey_pem,peer_dh_prvkey);
+			BIO* peer_dh_pubkey_pem = BIO_new(BIO_s_mem());
+			int ret = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,peer_dh_prvkey);
 
 			if(ret==0)
 				error(PEM_SERIALIZATION);
 
 			// send the public key in pem format in clear 
 			// and signed in combination with received nonce 
-
 			char* pem_buffer;
-			long pem_dim = BIO_get_mem_data(peer_dh_prvkey_pem,&pem_buffer);
+			long pem_dim = BIO_get_mem_data(peer_dh_pubkey_pem,&pem_buffer);
 
 			message m_a; 
 			char* pt = new char[pem_dim+sizeof(int)];
 		
-			extract_dim(pem_buffer, pt, pem_dim);
-			extract_dim(pem_buffer, m_a.ct, pem_dim);
+			memcpy(pt, pem_buffer, pem_dim);
+			m_a.ct.append(pem_buffer, pem_dim);
 			char buffer = (char*) &ns;
-			pt_concat(pt,buffer,sizeof(int));
+			memcpy(pt, buffer, sizeof(int));
 			char* a_sign;
 			unsigned int a_sign_size;
 			// signature of nonce and pem
 			signature(cl_pr_key,pt,&a_sign,pt.length,&a_sign_size);
-			pt_concat(m_a.ct, a_sign, a_sign_size);
+			m_a.ct.append(a_sign, a_sign_size);
 			send(m_a);
 			free(sv_sign);
 			free(a_sign);
 
 			// session key derivation
-			EVP_PKEY_CTX* kd_ctx;
+			EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(peer_dh_prvkey, NULL);
 			EVP_PKEY_derive_init(kd_ctx);
 
 			ret = EVP_PKEY_derive_set_peer(kd_ctx,sv_dh_pubkey);
@@ -271,9 +255,8 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 			secret = (unsigned char*)malloc(secret_length);
 			EVP_PKEY_derive(kd_ctx,secret,&secret_length);
 
-			// hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
+			// hashing the secret to produce session key through SHA-256 (aes key: 32byte)
 			EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
-
 
 			*sv_session_key = new unsigned char[32];
 			long sv_session_key_length;
@@ -286,12 +269,13 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 };
 
 
-// function handling errors 
+// TODO: function handling errors 
 
 void error(int code);
 
 // functions handling different messages
 
+// function to handle chat request message
 void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
 
@@ -300,9 +284,10 @@ void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned i
 	message m;
 	string pt = "";
 	char* buffer = (char*) &chat_request_code;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	char* buffer = (char*) counterAS;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
+	// writes the requested user to chat with id
 	pt.append(chat_to_id);
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
@@ -318,6 +303,7 @@ void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned i
 
 };
 
+// function to request list of available users
 void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
@@ -325,9 +311,9 @@ void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsi
 	message m;
 	string pt = "";
 	char* buffer = (char*) &list_request_code;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	char* buffer = (char*) counterAS;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -343,7 +329,7 @@ void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsi
 
 };
 
-
+// function to request logout
 void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
@@ -351,9 +337,9 @@ void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned c
 	message m;
 	string pt = "";
 	char* buffer = (char*) &logout_code;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	char* buffer = (char*) counterAS;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -368,6 +354,8 @@ void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned c
 
 
 };
+
+// function to request end chat
 void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
@@ -375,9 +363,9 @@ void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned
 	message m;
 	string pt = "";
 	char* buffer = (char*) &end_chat_code;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	char* buffer = (char*) counterAS;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -392,20 +380,22 @@ void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned
 
 };
 
+// function that sends message to peer
 void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
 	counter_mtx->lock();
 
 	message m_to_peer;
 	message m;
 
+	// preparation of the message for the peer encrypted with the peer session key
 	string pt_to_peer = "";
 	char* buffer = (char*) &peer_message_code;
-	pt_concat(pt, buffer, sizeof(int));
+	pt_to_peer.append(buffer, sizeof(int));
 	char* buffer = (char*) counterAB;
-	pt_concat(pt, buffer, sizeof(int));
-	pt.append(input_buffer);
+	pt_to_peer.append(buffer, sizeof(int));
+	pt_to_peer.append(input_buffer);
 
-	aes_gcm_encrypt(peer_key,pt,&m_to_peer.ct,&m_to_peer.ct_tag);
+	aes_gcm_encrypt(peer_key,pt_to_peer,&m_to_peer.ct,&m_to_peer.ct_tag);
 
 	//size of the encrypted message 
 	m_to_peer.size_ct = strlen(m_to_peer.ct) +1;
@@ -413,14 +403,14 @@ void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned
 	//after encrypting the message for the peer, it gets encapsulated in the message for the server
 	string pt = "";
 	char* buffer = (char*) &peer_message_code;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	char* buffer = (char*) counterAS;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	char* buffer = (char*) &m_to_peer.size_ct;
-	pt_concat(pt, buffer, sizeof(int));
+	pt.append(buffer, sizeof(int));
 	pt.append(m_to_peer.ct);
 	char* buffer = (char*) &m_to_peer.ct_tag;
-	pt_concat(pt, buffer, sizeof(long double));
+	pt.append(buffer, sizeof(long double));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -439,6 +429,7 @@ void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned
 
 int main(){
 
+	//TODO: understand where to store keys
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
 	FILE *fp_CA_cert = fopen("fp_CA_cert.pem", "r"); 
@@ -451,24 +442,22 @@ int main(){
 	EVP_PKEY* ca_pub_key;
 	EVP_PKEY* cl_pub_key;
 	EVP_PKEY* cl_pr_key; 
-
-
-	unsigned long int p,g;
+	EVP_PKEY* sv_pub_key;
+	unsigned char* peer_session_key;
+	unsigned char* sv_session_key;
 
 	// core
 
 	int socket_in = open_socket();
 	int socket_out;
 
-	EVP_PKEY* sv_pub_key;
-	unsigned char* peer_session_key;
-	unsigned char* sv_session_key;
-
 	bool chatting = false;
 	string peer_id;
 	
+	//authentication of the client
 	auth(cl_pr_key,cl_pub_key,socket_in,&socket_out,sv_session_key);
 
+	//initialization of mutex and counters for messages
 	mutex counter_mtx;
 	static unsigned int counterAS = 0;
 	static unsigned int counterSA = 0;
@@ -476,12 +465,16 @@ int main(){
 	static unsigned int counterBA = 0;
 	string input_buffer;
 
+	//creation of thread handling receieved messages
 	thread receiving (received_msg_handler, ref(counterSA)); 
 
+	//loop that analyzes input from user
 	while(true){
 		cin >> input_buffer;
+		//gets the first word of input
 		string first_word = input_buffer.substr(0,input_buffer.find(' '));
 		
+		//checks if the first word is a command
 		if (!chatting & first_word.compare(list_request_cmd))
 			list_request(socket_out,&counter_mtx,&counterAS,sv_session_key);
 		else if (!chatting & first_word.compare(chat_request_cmd)){
@@ -500,6 +493,7 @@ int main(){
 			logout(socket_out,&counter_mtx,&counterAS,sv_session_key);
 		else if (first_word.compare(end_chat_cmd))
 			end_chat(socket_out,&counter_mtx,&counterAS,sv_session_key);
+		//there is no command, so if chatting is true it's a message for the peer	
 		else if(chatting)
 			send_to_peer(socket_out,input_buffer,&counter_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
 
