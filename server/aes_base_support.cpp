@@ -4,15 +4,6 @@
 
 void handleErrors();
 
-
-int encode_message(Message* reply, unsigned char* data, int data_len, unsigned char* key){
-    //create IV and add it to reply message
-    if(!reply->GenIV()){
-        if(!reply->SetCtLen(gcm_encrypt(data, data_len, NULL, NULL, key, reply->GetIV(), 12, reply->ct, reply->ct_tag)))
-            handleErrors();
-    }
-}
-
 int gcm_encrypt(unsigned char *plaintext, int plaintext_len,
                 unsigned char *aad, int aad_len,
                 unsigned char *key,
