@@ -6,7 +6,7 @@
     int32_t session_key_placeholder;
     int32_t public_key_placeholder;
     int32_t counter_from = 0;
-    int32_t counter_to = 0;
+    int32_t  counter_to = 0;
     bool isBusy = false;
 
 ClientElement::ClientElement()
