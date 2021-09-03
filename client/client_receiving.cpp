@@ -30,9 +30,9 @@ void user_wants_to_chat(string data, int socket_out,int* counterAS,mutex* counte
             message m;
             string pt = "";
             char* buffer = (char*) &chat_request_accept_code;
-            pt.append(buffer, sizeof(int));
+            pt.append(buffer, sizeof(int32_t));
             buffer = (char*) counterAS;
-            pt.append(buffer, sizeof(int));
+            pt.append(buffer, sizeof(int32_t));
 
             aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -56,9 +56,9 @@ void user_wants_to_chat(string data, int socket_out,int* counterAS,mutex* counte
             message m;
             string pt = "";
             char* buffer = (char*) &chat_request_denied_code;
-            pt.append(buffer, sizeof(int));
+            pt.append(buffer, sizeof(int32_t));
             buffer = (char*) counterAS;
-            pt.append(buffer, sizeof(int));
+            pt.append(buffer, sizeof(int32_t));
 
             aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -88,11 +88,11 @@ void chat_request_accepted(string data, unsigned char* sv_key,int* na, EVP_PKEY*
     message m;
     string pt = "";
     char* buffer = (char*) &nonce_msg_code;
-    pt.append(buffer, sizeof(int));
+    pt.append(buffer, sizeof(int32_t));
     buffer = (char*) counterAS;
-    pt.append(buffer, sizeof(int));
+    pt.append(buffer, sizeof(int32_t));
     buffer = (char*) na;
-    pt.append(buffer, sizeof(int));
+    pt.append(buffer, sizeof(int32_t));
 
     aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -108,7 +108,7 @@ void chat_request_accepted(string data, unsigned char* sv_key,int* na, EVP_PKEY*
     //stores the public key automatically sent with the accepted chat message
     int pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
-    string_to_char((char*)&pem_dim, &data, sizeof(int));
+    string_to_char((char*)&pem_dim, &data, sizeof(int32_t));
     char * buffer = new char[pem_dim];
     string_to_char(buffer, &data, pem_dim);
     BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
@@ -128,7 +128,7 @@ void peer_public_key_msg(string data, EVP_PKEY** peer_public_key){
     //stores the public key automatically sent by server
     int pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
-    string_to_char((char*)&pem_dim, &data, sizeof(int));
+    string_to_char((char*)&pem_dim, &data, sizeof(int32_t));
     char * buffer = new char[pem_dim];
     string_to_char(buffer, &data, pem_dim);
     BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
@@ -179,25 +179,25 @@ void nonce_msg(string data, unsigned char* sv_key,EVP_PKEY** cl_dh_prvkey,int* n
     message m;
     string pt_data = "";
     char* buffer = (char*) &first_key_negotiation_code;
-    pt_data.append(buffer, sizeof(int));
+    pt_data.append(buffer, sizeof(int32_t));
     buffer = (char*) counterAS;
-    pt_data.append(buffer, sizeof(int));
+    pt_data.append(buffer, sizeof(int32_t));
 
     // send the public key in pem format in clear 
     // and signed in combination with received nonce 
     char* cl_pem_buffer;
     long cl_pem_dim = BIO_get_mem_data(cl_dh_pubkey_pem,&cl_pem_buffer);
     
-    char* pt = new char[cl_pem_dim+sizeof(int)];
+    char* pt = new char[cl_pem_dim+sizeof(int32_t)];
 
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
     char* buffer = (char*) &nb;
-    pt_data.append(buffer, sizeof(int));
+    pt_data.append(buffer, sizeof(int32_t));
     buffer = (char*) &cl_pem_dim;
     pt_data.append(buffer, sizeof(long));
     pt_data.append(cl_pem_buffer, cl_pem_dim);
     buffer = (char*) &na;
-    memcpy(pt, buffer, sizeof(int));
+    memcpy(pt, buffer, sizeof(int32_t));
     char* cl_sign;
     unsigned int cl_sign_size;
 
@@ -284,26 +284,26 @@ void first_key_negotiation(string data, unsigned char* sv_key, unsigned char** p
     if(ret==0)
         error(PEM_SERIALIZATION);
 
-    message m;
+    message m; // message 9
     string pt_data = "";
     char* buffer = (char*) &second_key_negotiation_code;
-    pt_data.append(buffer, sizeof(int));
+    pt_data.append(buffer, sizeof(int32_t));
     buffer = (char*) counterAS;
-    pt_data.append(buffer, sizeof(int));
+    pt_data.append(buffer, sizeof(int32_t));
 
     // send the public key in pem format in clear 
     // and signed in combination with received nonce 
     char* cl_pem_buffer;
     long cl_pem_dim = BIO_get_mem_data(cl_dh_pubkey_pem,&cl_pem_buffer);
     
-    char* pt = new char[cl_pem_dim+sizeof(int)];
+    char* pt = new char[cl_pem_dim+sizeof(int32_t)];
 
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
     buffer = (char*) &cl_pem_dim;
     pt_data.append(buffer, sizeof(long));
     pt_data.append(cl_pem_buffer, cl_pem_dim);
     buffer = (char*) &nb;
-    memcpy(pt, buffer, sizeof(int));
+    memcpy(pt, buffer, sizeof(int32_t));
     char* cl_sign;
     unsigned int cl_sign_size;
 
@@ -346,7 +346,7 @@ void first_key_negotiation(string data, unsigned char* sv_key, unsigned char** p
     // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
     EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
 
-    *peer_session_key = new unsigned char[32];
+    *peer_session_key = (unsigned char*)calloc(32*sizeof(unsigned char));
     long peer_session_key_length;
     EVP_DigestInit(hash_ctx,EVP_sha256());
     EVP_DigestUpdate(hash_ctx,secret,secret_length);
@@ -406,7 +406,7 @@ void second_key_negotiation(string data, EVP_PKEY* cl_dh_prvkey,unsigned char** 
     // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
     EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
 
-    *peer_session_key = new unsigned char[32];
+    *peer_session_key = (unsigned char*)calloc(32*sizeof(unsigned char));
     long peer_session_key_length;
     EVP_DigestInit(hash_ctx,EVP_sha256());
     EVP_DigestUpdate(hash_ctx,secret,secret_length);
@@ -456,8 +456,8 @@ void peer_message_received(string message, int* counterBA, unsigned char* peer_s
     if(!aes_gcm_decrypt(peer_session_key, ct, &pt, ct_tag))
         error(INVALID_MESSAGE);
 
-    string_to_char((char*) &opcode, &pt, sizeof(int));
-    string_to_char((char*) &counter, &pt, sizeof(int));
+    string_to_char((char*) &opcode, &pt, sizeof(int32_t));
+    string_to_char((char*) &counter, &pt, sizeof(int32_t));
 
     strcpy(data,pt);
 
@@ -493,16 +493,16 @@ void received_msg_handler(unsigned int* counterSA){
         string pt;
         string data;
 
-        memcpy(&size_ct, &m, size_of(int));
+        memcpy(&size_ct, &m, sizeof(int32_t));
         ct.append((char*)(&m)+4, size_ct);
-        memcpy(&ct_tag, (&m)+4+size_ct, size_of(long double));
+        memcpy(&ct_tag, (&m)+4+size_ct, 16);
 
         //decrypts message from server
         if(!aes_gcm_decrypt(sv_session_key, ct, &pt, ct_tag))
             error(INVALID_MESSAGE);
 
-        string_to_char((char*) &opcode,  &pt, sizeof(int));
-        string_to_char((char*) &counter, &pt, sizeof(int));
+        string_to_char((char*) &opcode,  &pt, sizeof(int32_t));
+        string_to_char((char*) &counter, &pt, sizeof(int32_t));
 
         strcpy(data,pt);
 
@@ -515,22 +515,22 @@ void received_msg_handler(unsigned int* counterSA){
                 case user_want_to_chat_code:
                 user_want_to_chat(data,socket_out,&counterAS,&counter_mtx);
 
-                case chat_request_accepted_code:
+                case chat_request_accepted_code: // from server message 4 to alice
                 chat_request_accepted(data,sv_session_key,&na,cl_pr_key,&peer_public_key,socket_out,&counterAS,&counter_mtx);
 
                 case chat_request_denied_code:
                 chat_request_denied();
 
-                case peer_public_key_msg_code:
+                case peer_public_key_msg_code: // from server message 4 to bob
                 peer_public_key_msg(data,&peer_public_key);
 
-                case nonce_msg_code:
+                case nonce_msg_code: // receiving 6
                 nonce_msg(data,sv_session_key,&cl_dh_prvkey,&nb,cl_pr_key,peer_public_key,socket_out,&counterAS,&counter_mtx);
 
-                case first_key_negotiation_code:
+                case first_key_negotiation_code: // receiving 8
                 first_key_negotiation(data,sv_session_key,&peer_session_key,na,cl_pr_key,peer_public_key,socket_out,&counterAS,&counter_mtx);
 
-                case second_key_negotiation_code:
+                case second_key_negotiation_code: // receiving 10
                 second_key_negotiation(data,cl_dh_prvkey,&peer_session_key,nb,cl_pr_key,peer_public_key);
 
                 case closed_chat_code:

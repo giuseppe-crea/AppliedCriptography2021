@@ -13,8 +13,9 @@ using namespace std;
 
 struct message{
 	int size_ct;
-	string ct; // encryption E(op_code, counter, data),
-	long double ct_tag; //long long should have size 16 byte, 128 bit
+	unsigned char* ct; // encryption E(op_code, counter, data),
+	unsigned char ct_tag[16]; //long long should have size 16 byte, 128 bit
+	unsigned char iv[12];
 };
 
 
@@ -52,10 +53,6 @@ const string list_request_cmd = ":list";
 // const for signatures in auth
 const EVP_MD* md = EVP_sha256();
 
-// TODO: encryption
-void aes_gcm_encrypt(unsigned char* key,string pt,string* ct,long double* tag);
-void aes_gcm_decrypt(unsigned char* key,string ct,string* pt,long double tag);
-
 // server connection info & utilities
 const int server_addres = 1;
 const int server_port = 1;
@@ -75,13 +72,13 @@ bool verify_sign(EVP_PKEY* pub_key, char* data, int n, long data_dim, char* sign
 	if(ret == 0){ cerr << "Error: EVP_VerifyInit returned " << ret << "\n"; exit(1); }
 
 	//verifies the signature
-	int buffer_dim = sizeof(int)+data_dim;
+	int buffer_dim = sizeof(int32_t)+data_dim;
 
 	char buffer[buffer_dim];
 	
 	//takes the data and the nonce that have been signed
-	memcpy((char*) data, buffer, data_dim));
-	memcpy((char*) &n, buffer, sizeof(int));
+	memcpy((char*) data, buffer, data_dim);
+	memcpy((char*) &n, buffer, sizeof(int32_t));
 
 	//actual signature verification
 	ret = EVP_VerifyUpdate(md_ctx, (char*)&buffer, buffer_dim);  
@@ -110,9 +107,6 @@ bool signature(EVP_KEY* cl_pr_key, char* pt, unsigned char** sign, int length, u
 	//allocates the signature
 	*sign = (unsigned char*)malloc(EVP_PKEY_size(cl_pr_key));
 
-	ret = EVP_VerifyInit(md_ctx, md);
-	if(ret == 0){ cerr << "Error: EVP_VerifyInit returned " << ret << "\n"; exit(1); }
-
 	//computes the signature
 	ret = EVP_SignInit(md_ctx, md);
 
@@ -140,7 +134,10 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 	//TODO: random()
 	//generates random nonce to be sent
 	int na = random();
-	//TODO: message to the server with client ID and nonce
+	message first_m;
+	first_m.ct.append((char*)&na,sizeof(int32_t));
+	first_m.ct.append(cl_id);
+	first_m.ct.size_ct = first_m.ct.strlen() + sizeof(int32_t);
 	//sends nonce in the clear
 	send(*socket_out, na);
 	//waits for a message from the server
@@ -158,14 +155,16 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 
 	long read_dim = 0; // counts the number of bytes read from message
 
-	memcpy(&size, &m, sizeof(int));
-	read_dim += sizeof(int);
+	memcpy(&size, &m, sizeof(int32_t));
+	read_dim += sizeof(int32_t);
+	memcpy(&ns, (&m)+read_dim, sizeof(int32_t));
+	read_dim += sizeof(int32_t);	
 	mempcy(&sv_pem_size, (&m)+read_dim, sizeof(long));	
 	read_dim += sizeof(long);
 	BIO_write(sv_pem,(void*)(&m)+read_dim,sv_pem_size);
 	read_dim += sv_pem_size;
-	memcpy(&sign_size, (&m)+read_dim, sizeof(int));
-	read_dim += sizeof(int);
+	memcpy(&sign_size, (&m)+read_dim, sizeof(int32_t));
+	read_dim += sizeof(int32_t);
 	sv_sign = malloc(sign_size);
 	memcpy(sv_sign, (&m)+read_dim, sign_size);
 	read_dim += sign_size;
@@ -221,16 +220,18 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 			long pem_dim = BIO_get_mem_data(peer_dh_pubkey_pem,&pem_buffer);
 
 			message m_a; 
-			char* pt = new char[pem_dim+sizeof(int)];
+			char* pt = new char[pem_dim+sizeof(int32_t)];
 		
 			memcpy(pt, pem_buffer, pem_dim);
+			m_a.ct.append((char*)&pem_dim,sizeof(long));
 			m_a.ct.append(pem_buffer, pem_dim);
 			char buffer = (char*) &ns;
-			memcpy(pt, buffer, sizeof(int));
+			memcpy(pt, buffer, sizeof(int32_t));
 			char* a_sign;
 			unsigned int a_sign_size;
 			// signature of nonce and pem
 			signature(cl_pr_key,pt,&a_sign,pt.length,&a_sign_size);
+			m_a.ct.append((char*)&sign_size,sizeof(int32_t);
 			m_a.ct.append(a_sign, a_sign_size);
 			send(m_a);
 			free(sv_sign);
@@ -258,7 +259,7 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 			// hashing the secret to produce session key through SHA-256 (aes key: 32byte)
 			EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
 
-			*sv_session_key = new unsigned char[32];
+			*sv_session_key = (unsigned char*) calloc(32*sizeof(unsigned char)); // calloc is used to have an automatic padding in case sha_256 returns 224 bits object
 			long sv_session_key_length;
 			EVP_DigestInit(hash_ctx,EVP_sha256());
 			EVP_DigestUpdate(hash_ctx,secret,secret_length);
@@ -274,7 +275,6 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 void error(int code);
 
 // functions handling different messages
-
 // function to handle chat request message
 void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
@@ -282,15 +282,24 @@ void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned i
 	counter_mtx->lock();
 
 	message m;
+	unsigned char* pt_char;
 	string pt = "";
-	char* buffer = (char*) &chat_request_code;
-	pt.append(buffer, sizeof(int));
-	char* buffer = (char*) counterAS;
-	pt.append(buffer, sizeof(int));
-	// writes the requested user to chat with id
-	pt.append(chat_to_id);
+	int pt_dim = 2*sizeof(int32_t)+chat_to_id.size()+1;
 
-	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
+	// prepare data
+	memcpy(pt_char,&chat_request_accept_code,sizeof(int32_t));
+	memcpy(pt_char+sizeof(int32_t),counterAS,sizeof(int32_t));
+	memcpy(pt_char,chat_to_id.c_str(),chat_to_id.size()+1);
+
+	// encrypt data
+	unsigned char iv[12];
+	RAND_bytes(iv, 12);
+
+	m.size_ct = gcm_encrypt(pt.c_str(),pt.size(),NULL,NULL,sv_key,iv,12,m.ct,m.ct_tag);
+
+	if(m.size_ct < 0){
+		error(ENCRYPTION);
+	}
 
 	//size of the encrypted message 
 	m.size_ct = strlen(m.ct) +1;
@@ -311,9 +320,9 @@ void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsi
 	message m;
 	string pt = "";
 	char* buffer = (char*) &list_request_code;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 	char* buffer = (char*) counterAS;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -337,9 +346,9 @@ void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned c
 	message m;
 	string pt = "";
 	char* buffer = (char*) &logout_code;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 	char* buffer = (char*) counterAS;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -363,9 +372,9 @@ void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned
 	message m;
 	string pt = "";
 	char* buffer = (char*) &end_chat_code;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 	char* buffer = (char*) counterAS;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 
 	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
 
@@ -390,9 +399,9 @@ void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned
 	// preparation of the message for the peer encrypted with the peer session key
 	string pt_to_peer = "";
 	char* buffer = (char*) &peer_message_code;
-	pt_to_peer.append(buffer, sizeof(int));
+	pt_to_peer.append(buffer, sizeof(int32_t));
 	char* buffer = (char*) counterAB;
-	pt_to_peer.append(buffer, sizeof(int));
+	pt_to_peer.append(buffer, sizeof(int32_t));
 	pt_to_peer.append(input_buffer);
 
 	aes_gcm_encrypt(peer_key,pt_to_peer,&m_to_peer.ct,&m_to_peer.ct_tag);
@@ -403,11 +412,11 @@ void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned
 	//after encrypting the message for the peer, it gets encapsulated in the message for the server
 	string pt = "";
 	char* buffer = (char*) &peer_message_code;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 	char* buffer = (char*) counterAS;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 	char* buffer = (char*) &m_to_peer.size_ct;
-	pt.append(buffer, sizeof(int));
+	pt.append(buffer, sizeof(int32_t));
 	pt.append(m_to_peer.ct);
 	char* buffer = (char*) &m_to_peer.ct_tag;
 	pt.append(buffer, sizeof(long double));
@@ -429,6 +438,16 @@ void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned
 
 int main(){
 
+	string cl_id;
+	string password;
+	cout << "Who are you?" << endl;
+	cin >> cl_id;
+	cout << "Please insert password" << endl;
+	cin >> password;
+
+
+
+
 	//TODO: understand where to store keys
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
@@ -443,8 +462,11 @@ int main(){
 	EVP_PKEY* cl_pub_key;
 	EVP_PKEY* cl_pr_key; 
 	EVP_PKEY* sv_pub_key;
-	unsigned char* peer_session_key;
+	static unsigned char* peer_session_key;
 	unsigned char* sv_session_key;
+
+	if(!get_keys(cl_id,password,cl_pub_key,cl_pr_key))
+		error(INVALID_USER);
 
 	// core
 
