@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "aes_base_support.cpp"
+
+const int32_t STATIC_POSTFIX = 28;
 	
 Message::Message()
 {
@@ -104,14 +106,23 @@ int32_t Message::Encode_message(unsigned char* key){
     return 0;
 }
 
-int32_t Message::Decode_message(unsigned char* buffer, int buff_len, unsigned char* key){
+int32_t Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
+    int32_t cursor = 0;
+    int32_t opCode;
+    memcpy(&opCode, buffer, sizeof(int32_t));
+    cursor += sizeof(int32_t);
+    this->SetOpCode(opCode);
+    unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer-cursor);
+    memcpy(data_buffer, buffer+cursor, data_size_buffer-cursor);
+    this->setData(data_buffer, data_size_buffer-cursor);
+}
+
+int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key){
     int32_t cursor = 0;
     // init a buffer for the data
-    int32_t data_size_buffer;
     int32_t opCode;
     int32_t counter;
-    memcpy(&data_size_buffer, buffer, sizeof(int32_t));
-    cursor += sizeof(int32_t);
+    int32_t data_size_buffer = buff_len - STATIC_POSTFIX;
     unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer);
     memcpy(data_buffer, buffer+cursor, data_size_buffer);
     cursor += data_size_buffer;
@@ -144,10 +155,11 @@ int32_t Message::Decode_message(unsigned char* buffer, int buff_len, unsigned ch
 // serializes the data to be sent from the fields of Message object
 int32_t Message::SendMessage(int socketID, int* counter){
     int32_t cursor = 0;
+    int32_t totalSize = this->ct_len + STATIC_POSTFIX;
     // init a buffer for the data
     unsigned char* buffer = (unsigned char *)malloc(sizeof(int32_t)+16+12+this->ct_len);
     // copy size of ciphertext
-    memcpy(buffer, &this->ct_len, sizeof(int32_t));
+    memcpy(buffer, &totalSize, sizeof(int32_t));
     cursor += sizeof(int32_t);
     // copy ciphertext
     memcpy(buffer+cursor, this->ct, this->ct_len);

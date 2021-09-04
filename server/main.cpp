@@ -15,6 +15,7 @@
 #include "Message.hpp"
 
 #define PORT "9034"   // port we're listening on
+std::map<int, ClientElement*> connectedClients;
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -26,9 +27,21 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+void HandleMessage(Message* message){
+    //switch(opCode) case 1:
+    // read int32_t nonce
+
+    // read msg_len_buf - 2*sizeof(int32_t) unsigned char* userID
+        
+    //case 2:
+    // size of PEM
+    // PEM
+    // extrapolate size of signature = (msg_len_buf - size(PEM) - 2*sizeof(int32_t))
+    // signature(pem + nonce)
+}  
+
 int main(void)
-{
-    std::map<int, ClientElement*> connectedClients;
+{ 
     fd_set master;    // master file descriptor list
     fd_set read_fds;  // temp file descriptor list for select()
     int fdmax;        // maximum file descriptor number
@@ -38,7 +51,8 @@ int main(void)
     struct sockaddr_storage remoteaddr; // client address
     socklen_t addrlen;
 
-    char buf[256];    // buffer for client data
+    int32_t msg_len_buf;    // buffer for message len -STATIC_MESSAGE_POSTFIX bytes
+    unsigned char* msg_buf;
     int nbytes;
 
 	char remoteIP[INET6_ADDRSTRLEN];
@@ -138,7 +152,7 @@ int main(void)
                     }
                 } else {
                     // handle data from a client
-                    if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
+                    if ((nbytes = recv(i, &msg_len_buf, sizeof(int32_t), 0)) <= 0) {
                         // got error or connection closed by client
                         if (nbytes == 0) {
                             // connection closed
@@ -156,8 +170,32 @@ int main(void)
                         }
                         FD_CLR(i, &master); // remove from master set
                     } else {
-                        // we got some data from a client
-                        //TODO: Handle-Message
+                        // we got some data from a client and we read the total message size and saved to buf
+                        // block to handle handshake messages
+                        // these messages will have negative size to differentiate them from encrypted messages
+                        bool encrypted_message = true;
+                        if(msg_len_buf < 0){
+                            msg_len_buf = -msg_len_buf;
+                            encrypted_message = false;
+                        }
+                        msg_buf = (unsigned char*)malloc((msg_len_buf)*sizeof(unsigned char));
+                        if ((nbytes = recv(i, msg_buf, msg_len_buf, 0)) != msg_len_buf)
+                            perror("recv");
+                        if(!encrypted_message){
+                            Message* message = new Message();
+                            message->Unwrap_unencrypted_message(msg_buf, msg_len_buf);
+                            HandleMessage(message);
+                            delete(message);                            
+                        } else {
+                            Message* message = new Message();
+                            auto tmpIterator = connectedClients.find(i);
+                            if(tmpIterator != connectedClients.end())
+                            {
+                                message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey());
+                                HandleMessage(message);
+                            }
+                            delete(message);  
+                        }
                     }
                 } // END handle data from client
             } // END got new incoming connection
