@@ -15,7 +15,6 @@ class Message
 	public:
 		Message();
 		~Message();
-		int32_t SetIV(unsigned char* eiv);
 		int32_t GenIV();
 		unsigned char* GetIV();
 		int32_t size_ct;
@@ -30,9 +29,9 @@ class Message
 		unsigned char* getData(int* datadim);
 		int32_t setData(void* buffer, int32_t buffer_dim);
 		int32_t SendMessage(int socketID, int* counter);
-		int32_t ReceiveMessage(unsigned char* buffer, int* counter);
 		int32_t Encode_message(unsigned char* key);
-		int32_t Decode_message(unsigned char* key);
+		int32_t Decode_message(unsigned char* buffer, int buff_len, unsigned char* key);
+
 
 };
 #endif

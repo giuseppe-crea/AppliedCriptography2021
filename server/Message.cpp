@@ -7,26 +7,29 @@
 	
 Message::Message()
 {
-	
+	this->iv = NULL;
+    this->data = NULL;
+    this->ct = NULL;
+    this->ct_tag = NULL;
 }
 	
 Message::~Message()
 {
-	
+	free(this->iv);
+    free(this->data);
+    free(this->ct);
+    free(this->ct_tag);
 }
 
 int32_t Message::GenIV(){
+    if(this->iv != NULL)
+        handleErrors();
+    this->iv = (unsigned char*)malloc(12*sizeof(unsigned char));
+    if(this->iv == NULL)
+        handleErrors();
     if(!RAND_bytes(this->iv, 12))
         return -1;
     return 0;
-}
-
-int32_t Message::SetIV(unsigned char* eiv){
-    if(eiv != NULL){
-        memcpy(this->iv, eiv, 12);
-        return 0;
-    }
-    else return -1;
 }
 
 unsigned char* Message::GetIV(){
@@ -66,6 +69,22 @@ int32_t Message::GetOpCode(){
     return this->op_code;
 }
 
+int32_t Message::setData(void* buffer, int32_t buffer_dim){
+    if(buffer == NULL)
+        return -1;
+    this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
+    memcpy(this->data, buffer, buffer_dim);
+    return 0;
+}
+
+unsigned char* Message::getData(int* datadim){
+    if(this->data != NULL){
+        *datadim = this->data_dim;
+        return this->data;
+    }else
+        return NULL;
+}
+
 int32_t Message::Encode_message(unsigned char* key){
     int32_t cursor = 0;
     //create IV and add it to reply message
@@ -85,7 +104,40 @@ int32_t Message::Encode_message(unsigned char* key){
     return 0;
 }
 
-int32_t Message::Decode_message(unsigned char* key){
+int32_t Message::Decode_message(unsigned char* buffer, int buff_len, unsigned char* key){
+    int32_t cursor = 0;
+    // init a buffer for the data
+    int32_t data_size_buffer;
+    int32_t opCode;
+    int32_t counter;
+    memcpy(&data_size_buffer, buffer, sizeof(int32_t));
+    cursor += sizeof(int32_t);
+    unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer);
+    memcpy(data_buffer, buffer+cursor, data_size_buffer);
+    cursor += data_size_buffer;
+    unsigned char* iv_buffer = (unsigned char *)malloc(12);
+    memcpy(iv_buffer, buffer+cursor, 12);
+    cursor += 12;
+    unsigned char* tag_buffer = (unsigned char *)malloc(16);
+    memcpy(tag_buffer, buffer+cursor, 16);
+    cursor += 16;
+
+    // decryption
+    unsigned char* pt_buffer;
+    int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, NULL, tag_buffer, key, iv_buffer, 12, pt_buffer);
+    if(dataLen <= 0)
+        handleErrors();
+    
+    cursor = 0;
+    memcpy(&opCode, pt_buffer, sizeof(int32_t));
+    cursor += sizeof(int32_t);
+    this->SetOpCode(opCode);
+    memcpy(&counter, pt_buffer+cursor, sizeof(int32_t));
+    cursor += sizeof(int32_t);
+    this->SetCounter(counter);
+    if(!this->setData(pt_buffer+cursor, dataLen-cursor))
+        handleErrors();
+    
     return 0;
 }
 
@@ -111,20 +163,4 @@ int32_t Message::SendMessage(int socketID, int* counter){
         return 0;
     }else 
         return -1;
-}
-
-int32_t Message::setData(void* buffer, int32_t buffer_dim){
-    if(buffer == NULL)
-        return -1;
-    this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
-    memcpy(this->data, buffer, buffer_dim);
-    return 0;
-}
-
-unsigned char* Message::getData(int* datadim){
-    if(this->data != NULL){
-        *datadim = this->data_dim;
-        return this->data;
-    }else
-        return NULL;
 }
