@@ -54,11 +54,11 @@ const string list_request_cmd = ":list";
 const EVP_MD* md = EVP_sha256();
 
 // server connection info & utilities
-const int server_addres = 1;
-const int server_port = 1;
+const string ADDRESS = "localhost";
+const string PORT = "9034";
 
 // function to send message
-void send(int socket_out,message m);
+void send(int sockfd,message m);
 
 // function to verify signature
 bool verify_sign(EVP_PKEY* pub_key, char* data, int n, long data_dim, char* sign, int sign_dim){
@@ -128,9 +128,9 @@ bool signature(EVP_KEY* cl_pr_key, char* pt, unsigned char** sign, int length, u
 
 // authentication between client and server
 
-void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_out, unsigned char** sv_session_key, X509_STORE* store){
+void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* sockfd, unsigned char** sv_session_key, X509_STORE* store){
 	//opens connection
-	*socket_out = open_connection(socket_in);
+	*sockfd = open_connection(socket_in);
 	//TODO: random()
 	//generates random nonce to be sent
 	int na = random();
@@ -139,7 +139,7 @@ void auth(EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int socket_in, int* socket_
 	first_m.ct.append(cl_id);
 	first_m.ct.size_ct = first_m.ct.strlen() + sizeof(int32_t);
 	//sends nonce in the clear
-	send(*socket_out, na);
+	send(*sockfd, na);
 	//waits for a message from the server
 	message m = receive(socket_in);
 
@@ -276,7 +276,7 @@ void error(int code);
 
 // functions handling different messages
 // function to handle chat request message
-void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
+void chat_request(int sockfd,string chat_to_id,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
 
 	counter_mtx->lock();
@@ -304,7 +304,7 @@ void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned i
 	//size of the encrypted message 
 	m.size_ct = strlen(m.ct) +1;
 
-	send(socket_out,m);
+	send(sockfd,m);
 
 	*counterAS++;
 
@@ -313,7 +313,7 @@ void chat_request(int socket_out,string chat_to_id,mutex* counter_mtx,unsigned i
 };
 
 // function to request list of available users
-void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
+void list_request(int sockfd,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
 
@@ -329,7 +329,7 @@ void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsi
 	//size of the encrypted message 
 	m.size_ct = strlen(m.ct) +1;
 
-	send(socket_out,m);
+	send(sockfd,m);
 
 	*counterAS++;
 
@@ -339,7 +339,7 @@ void list_request(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsi
 };
 
 // function to request logout
-void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
+void logout(int sockfd,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
 
@@ -355,17 +355,18 @@ void logout(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned c
 	//size of the encrypted message 
 	m.size_ct = strlen(m.ct) +1;
 
-	send(socket_out,m);
+	send(sockfd,m);
 
 	*counterAS++;
 
 	counter_mtx->unlock();
 
-
+	close(sockfd);
+	exit(-2);
 };
 
 // function to request end chat
-void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
+void end_chat(int sockfd,mutex* counter_mtx,unsigned int* counterAS,unsigned char* sv_key){
 
 	counter_mtx->lock();
 
@@ -381,7 +382,7 @@ void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned
 	//size of the encrypted message 
 	m.size_ct = strlen(m.ct) +1;
 
-	send(socket_out,m);
+	send(sockfd,m);
 
 	*counterAS++;
 
@@ -390,7 +391,7 @@ void end_chat(int socket_out,mutex* counter_mtx,unsigned int* counterAS,unsigned
 };
 
 // function that sends message to peer
-void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
+void send_to_peer(int sockfd,string input_buffer,mutex* counter_mtx,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
 	counter_mtx->lock();
 
 	message m_to_peer;
@@ -426,7 +427,7 @@ void send_to_peer(int socket_out,string input_buffer,mutex* counter_mtx,unsigned
 	//size of the encrypted message 
 	m.size_ct = strlen(m.ct) +1;
 
-	send(socket_out,m);
+	send(sockfd,m);
 
 	*counterAB++;
 	*counterAS++;
@@ -444,9 +445,6 @@ int main(){
 	cin >> cl_id;
 	cout << "Please insert password" << endl;
 	cin >> password;
-
-
-
 
 	//TODO: understand where to store keys
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
@@ -468,16 +466,33 @@ int main(){
 	if(!get_keys(cl_id,password,cl_pub_key,cl_pr_key))
 		error(INVALID_USER);
 
-	// core
+	// connect to server
 
-	int socket_in = open_socket();
-	int socket_out;
+	int sockfd, numbytes; 
+	int32_t buf_dim;
+	char* buf;
+	struct addrinfo serv_addr;
+	int rv;
+	char s[INET6_ADDRSTRLEN];
+
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_address.s_addr = ADDRESS;
+	serv_addr.sin_port = atoi(PORT);
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0)
+  		error("ERROR opening socket");
+
+
+	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
+        error("ERROR connecting");
 
 	bool chatting = false;
 	string peer_id;
 	
 	//authentication of the client
-	auth(cl_pr_key,cl_pub_key,socket_in,&socket_out,sv_session_key);
+	auth(cl_pr_key,cl_pub_key,socket_in,&sockfd,sv_session_key);
 
 	//initialization of mutex and counters for messages
 	mutex counter_mtx;
@@ -498,7 +513,7 @@ int main(){
 		
 		//checks if the first word is a command
 		if (!chatting & first_word.compare(list_request_cmd))
-			list_request(socket_out,&counter_mtx,&counterAS,sv_session_key);
+			list_request(sockfd,&counter_mtx,&counterAS,sv_session_key);
 		else if (!chatting & first_word.compare(chat_request_cmd)){
 			if(input_buffer.size() < 6)
 				error(chat_request_code);
@@ -508,16 +523,16 @@ int main(){
 				string recipient = input_buffer.substr(5,input_buffer.find(' '));
 				ss << recipient;
 				ss >> recipient_id;
-				chat_request(socket_out,recipient_id,&counter_mtx,&counterAS,sv_session_key,peer_session_key);
+				chat_request(sockfd,recipient_id,&counter_mtx,&counterAS,sv_session_key,peer_session_key);
 			}
 		}
 		else if (first_word.compare(logout_cmd))
-			logout(socket_out,&counter_mtx,&counterAS,sv_session_key);
+			logout(sockfd,&counter_mtx,&counterAS,sv_session_key);
 		else if (first_word.compare(end_chat_cmd))
-			end_chat(socket_out,&counter_mtx,&counterAS,sv_session_key);
+			end_chat(sockfd,&counter_mtx,&counterAS,sv_session_key);
 		//there is no command, so if chatting is true it's a message for the peer	
 		else if(chatting)
-			send_to_peer(socket_out,input_buffer,&counter_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
+			send_to_peer(sockfd,input_buffer,&counter_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
 
 	}
 

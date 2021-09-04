@@ -421,9 +421,11 @@ void closed_chat(bool* chatting){
 };
 
 //function that handles forced logout from server in case of counters overflow
-void forced_logout(){
-    //forces logout
-    // closes sockets
+void forced_logout(int sockfd){
+    //forces logout and closes socket
+    close(sockfd);
+    cout << "Forced Logout: overflow in counter. If you want to keep chatting, please log in again." << endl;
+    exit(-3);
     // terminate execution of thread and main
 };
 
