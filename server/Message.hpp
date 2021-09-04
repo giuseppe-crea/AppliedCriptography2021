@@ -30,7 +30,8 @@ class Message
 		int32_t setData(void* buffer, int32_t buffer_dim);
 		int32_t SendMessage(int socketID, int* counter);
 		int32_t Encode_message(unsigned char* key);
-		int32_t Decode_message(unsigned char* buffer, int buff_len, unsigned char* key);
+		int32_t Unwrap_unencrypted_message(unsigned char* buffer, int32_t buff_len);
+		int32_t Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key);
 
 
 };
