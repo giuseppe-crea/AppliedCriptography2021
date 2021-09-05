@@ -13,6 +13,7 @@ Message::Message()
     this->data = NULL;
     this->ct = NULL;
     this->ct_tag = NULL;
+    this->data_dim = 0;
 }
 	
 Message::~Message()
