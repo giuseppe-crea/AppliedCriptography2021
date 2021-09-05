@@ -1,3 +1,8 @@
+#include "Message.cpp"
+#include "signature_utilities.cpp"
+using namespace std;
+
+
 struct message{
     int size_ct;
     string ct; // encryption E(op_code, counter, data),
@@ -7,7 +12,7 @@ struct message{
 // function to extract n bytes from string 
 void string_to_char(char *c, string* buffer, int n){
     for(int i = 0; i<n;i++){
-        c[i] = buffer[0];
+        c[i] = *buffer->c_str()+i;
         *buffer.erase(*buffer.begin());
     }
 }
@@ -476,7 +481,7 @@ void peer_message_received(string message, int* counterBA, unsigned char* peer_s
 };
 
 // loop function used to decrypt message received and analyze the opcode of the message to call the poper handler function
-void received_msg_handler(unsigned int* counterSA){
+void received_msg_handler(){
 
     EVP_PKEY* peer_public_key;
     EVP_PKEY* cl_dh_prvkey;
