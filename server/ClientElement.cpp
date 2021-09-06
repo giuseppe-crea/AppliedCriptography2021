@@ -12,6 +12,7 @@
 ClientElement::ClientElement()
 {
 	user_id = "";
+    chat_partner_id = "";
 }
 	
 ClientElement::~ClientElement()

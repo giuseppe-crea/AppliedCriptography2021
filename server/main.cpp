@@ -98,18 +98,10 @@ void HandleMessage(Message* message, int socket){
             }
         break;
 
-        
+        case chat_request_code:
+
+
     }
-
-    // read int32_t nonce
-
-    // read msg_len_buf - 2*sizeof(int32_t) unsigned char* userID
-        
-    //case 2:
-    // size of PEM
-    // PEM
-    // extrapolate size of signature = (msg_len_buf - size(PEM) - 2*sizeof(int32_t))
-    // signature(pem + nonce)
 }  
 
 int main(void)
@@ -237,21 +229,22 @@ int main(void)
                         auto tmpIterator = connectedClientsBySocket.find(i);
                         if(tmpIterator != connectedClientsBySocket.end())
                         {
-                            // alerting a potential chat partner that this user disconnected
-                            std::string partnerName = tmpIterator->second->GetPartnerName();
-                            //TODO: instantiate and send "your partner disconnected" message
-                            Message* message = new Message();
-                            message->SetOpCode(closed_chat_code);
-                            auto tmpPartnerIterator = connectedClientsByUsername.find(partnerName);
-                            ClientElement* chatPartner = tmpPartnerIterator->second;
-                            message->SetCounter(chatPartner->GetCounterTo());
-                            message->setData(NULL, 0);
-                            message->Encode_message(chatPartner->GetSessionKey());
-                            message->SendMessage(chatPartner->GetSocketID(), chatPartner);
-
                             std::string tmpUsername = tmpIterator->second->GetUsername();
                             if(!tmpUsername.empty()){
-                                // this user has a username, it must have exchanged at least one message with us
+                                // this user has a username, it might have a partner
+                                // alerting a potential chat partner that this user disconnected
+                                std::string partnerName = tmpIterator->second->GetPartnerName();
+                                Message* message = new Message();
+                                message->SetOpCode(closed_chat_code);
+                                auto tmpPartnerIterator = connectedClientsByUsername.find(partnerName);
+                                ClientElement* chatPartner = tmpPartnerIterator->second;
+                                message->SetCounter(chatPartner->GetCounterTo());
+                                message->setData(NULL, 0);
+                                message->Encode_message(chatPartner->GetSessionKey());
+                                message->SendMessage(chatPartner->GetSocketID(), chatPartner);
+                                // after alerting that user, we clear its chat partner field
+                                chatPartner->SetPartnerName("");
+                                // this user has a username, 
                                 // we can find the corresponding user object
                                 auto usernameIterator = connectedClientsByUsername.find(tmpUsername);
                                 if(usernameIterator != connectedClientsByUsername.end()){
