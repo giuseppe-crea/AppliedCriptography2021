@@ -2,23 +2,8 @@
 #include "signature_utilities.cpp"
 using namespace std;
 
-
-struct message{
-    int size_ct;
-    string ct; // encryption E(op_code, counter, data),
-    long double ct_tag; //long long should have size 16 byte, 128 bit
-};
-
-// function to extract n bytes from string 
-void string_to_char(char *c, string* buffer, int n){
-    for(int i = 0; i<n;i++){
-        c[i] = *buffer->c_str()+i;
-        *buffer.erase(*buffer.begin());
-    }
-}
-
 // function to handle message containing the request of a user who wants to chat
-void user_wants_to_chat(string data, int socket_out,int* counterAS,mutex* counter_mtx){
+void chat_request_received(unsigned char* data, int sockfd, unsigned char* sv_session_key, int* counterAS, mutex* counter_AS_mtx){
     //prints out the name of the user who wants to chat
     cout << "user " << data << " wants to chat, type y/n if accepted or denied";
     string reply;
@@ -28,53 +13,14 @@ void user_wants_to_chat(string data, int socket_out,int* counterAS,mutex* counte
         // request accepted
         if (strcmp(reply,"y")){         
             invalid_answer = false;
-
-            counter_mtx->lock();
-
-            // message with accepted request gets sent
-            message m;
-            string pt = "";
-            char* buffer = (char*) &chat_request_accept_code;
-            pt.append(buffer, sizeof(int32_t));
-            buffer = (char*) counterAS;
-            pt.append(buffer, sizeof(int32_t));
-
-            aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
-
-            //size of the encrypted message 
-            m.size_ct = strlen(m.ct) +1;
-
-            send(socket_out,m);
-
-            *counterAS++;
-
-            counter_mtx->unlock();
-
+        // message with accepted request gets sent
+        send_to_sv(chat_request_accept_code, sockfd, NULL, 0, counter_AS_mtx, counterAS, sv_session_key);
         } 
         // request denied
         else if (strcmp(reply,"n")){   
             invalid_answer = false;
-
-            counter_mtx->lock();
-
-            //message with denied request gets sent
-            message m;
-            string pt = "";
-            char* buffer = (char*) &chat_request_denied_code;
-            pt.append(buffer, sizeof(int32_t));
-            buffer = (char*) counterAS;
-            pt.append(buffer, sizeof(int32_t));
-
-            aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
-
-            //size of the encrypted message 
-            m.size_ct = strlen(m.ct) +1;
-
-            send(socket_out,m);
-
-            *counterAS++;
-
-            counter_mtx->unlock();
+        //message with denied request gets sent
+        send_to_sv(chat_request_denied_code, sockfd, NULL, 0, counter_AS_mtx, counterAS, sv_session_key);
             
         } else cout << "Error: wrong answer" << endl;
     }    
@@ -82,40 +28,24 @@ void user_wants_to_chat(string data, int socket_out,int* counterAS,mutex* counte
 
 
 //function that handles the accepted request from peer: sends random nonce to start session key negotiation
-void chat_request_accepted(string data, unsigned char* sv_key,int* na, EVP_PKEY* cl_pr_key,EVP_PKEY** peer_public_key,int socket_out,int* counterAS,mutex* counter_mtx){
+void chat_request_accepted(unsigned char* data, int* na, EVP_PKEY** peer_public_key, unsigned char* sv_session_key,  int sockfd, int* counterAS, mutex* counter_AS_mtx){
     //prints out "chat request accepted"
     cout << "chat request accepted" << endl;
-
-    counter_mtx->lock();
-
-    *na = random();
-
-    message m;
-    string pt = "";
-    char* buffer = (char*) &nonce_msg_code;
-    pt.append(buffer, sizeof(int32_t));
-    buffer = (char*) counterAS;
-    pt.append(buffer, sizeof(int32_t));
-    buffer = (char*) na;
-    pt.append(buffer, sizeof(int32_t));
-
-    aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
-
-    //size of the encrypted message 
-    m.size_ct = strlen(m.ct) +1;
-
-    send(socket_out,m);
-
-    *counterAS++;
-
-    counter_mtx->unlock();
+    
+    // sends nonce for peer to server
+    RAND_bytes(&na, sizeof(int32_t));
+    char* buffer;
+    int32_t buffer_dim = sizeof(int32_t);
+    memcyp(buffer, &na, buffer_dim);
+    send_to_sv(nonce_msg_code, sockfd, buffer, buffer_dim, counter_AS_mtx, counterAS, sv_session_key);
+    free(buffer);    
 
     //stores the public key automatically sent with the accepted chat message
     int pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
-    string_to_char((char*)&pem_dim, &data, sizeof(int32_t));
-    char * buffer = new char[pem_dim];
-    string_to_char(buffer, &data, pem_dim);
+    memcpy(&pem_dim, data, sizeof(int32_t));
+    buffer = new char[pem_dim];
+    memcpy(&buffer, data+sizeof(int32_t), pem_dim);
     BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
 
     *peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem,NULL,NULL,NULL);
@@ -124,32 +54,31 @@ void chat_request_accepted(string data, unsigned char* sv_key,int* na, EVP_PKEY*
 // function to notify that the chat request has been denied
 void chat_request_denied(){
     //prints out "chat request denied"
-    cout << "chat request denied" << endl;
+    cout << "Chat request denied. If you want to chat, send another request or accept one." << endl;
 
 };
 
 // function that handles recieved peer public key: in this case the client waits for the nonce message to proceed in key negotiation
-void peer_public_key_msg(string data, EVP_PKEY** peer_public_key){
+void peer_public_key_msg(unsigned char* data, EVP_PKEY** peer_public_key){
     //stores the public key automatically sent by server
     int pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
-    string_to_char((char*)&pem_dim, &data, sizeof(int32_t));
-    char * buffer = new char[pem_dim];
-    string_to_char(buffer, &data, pem_dim);
+    memcpy(&pem_dim, data, sizeof(int32_t));
+    buffer = new char[pem_dim];
+    memcpy(&buffer, data+sizeof(int32_t), pem_dim);
     BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
 
     *peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem,NULL,NULL,NULL);
 }
 
 // function that handles recieved nonce from peer: it generates diffie-hellmann key and sends it to peer
-void nonce_msg(string data, unsigned char* sv_key,EVP_PKEY** cl_dh_prvkey,int* nb, EVP_PKEY* cl_pr_key,EVP_PKEY* peer_public_key,int socket_out,int* counterAS,mutex* counter_mtx){
+void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvkey, int* na, EVP_PKEY* cl_pr_key, int sockfd, int* counterAS, mutex* counter_AS_mtx){
     //gets a nonce in the clear
-    int na;
-    string_to_char((char*)&na, &data, size_of(int));
+    int32_t nb;
+    memcpy(&nb, data, size_of(int32_t));
 
     //sends a new nonce, signed nonce and dh key as an automatic reply
-    counter_mtx->lock();
-
+    
     // load elliptic curve parameters
     EVP_PKEY* dh_params;
 
@@ -171,7 +100,7 @@ void nonce_msg(string data, unsigned char* sv_key,EVP_PKEY** cl_dh_prvkey,int* n
     EVP_PKEY_keygen(kg_ctx,cl_dh_prvkey);
     EVP_PKEY_CTX_free(kg_ctx);
 
-    // save public key in pem format in a memory BIO
+    // save client public key in pem format in a memory BIO
     BIO* cl_dh_pubkey_pem = BIO_new(BIO_s_mem());
     int ret = PEM_write_bio_PUBKEY(cl_dh_pubkey_pem,*cl_dh_prvkey);
 
@@ -179,76 +108,67 @@ void nonce_msg(string data, unsigned char* sv_key,EVP_PKEY** cl_dh_prvkey,int* n
         error(PEM_SERIALIZATION);
 
     // computes random nonce
-    *nb = random();
+    RAND_bytes(&na, sizeof(int32_t));
 
-    message m;
-    string pt_data = "";
-    char* buffer = (char*) &first_key_negotiation_code;
-    pt_data.append(buffer, sizeof(int32_t));
-    buffer = (char*) counterAS;
-    pt_data.append(buffer, sizeof(int32_t));
-
-    // send the public key in pem format in clear 
+    // sends the public key in pem format in clear 
     // and signed in combination with received nonce 
+    
+    // signature of nonce and pem
     char* cl_pem_buffer;
     long cl_pem_dim = BIO_get_mem_data(cl_dh_pubkey_pem,&cl_pem_buffer);
-    
     char* pt = new char[cl_pem_dim+sizeof(int32_t)];
-
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
-    char* buffer = (char*) &nb;
-    pt_data.append(buffer, sizeof(int32_t));
-    buffer = (char*) &cl_pem_dim;
-    pt_data.append(buffer, sizeof(long));
-    pt_data.append(cl_pem_buffer, cl_pem_dim);
-    buffer = (char*) &na;
-    memcpy(pt, buffer, sizeof(int32_t));
+    memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
     char* cl_sign;
-    unsigned int cl_sign_size;
+	unsigned int cl_sign_size;
+    signature(cl_pr_key,pt,&cl_sign,pt.length(),&cl_sign_size);
 
-    // signature of nonce and pem
-    signature(cl_pr_key,pt,&cl_sign,pt.length,&cl_sign_size);
-    //adding size of signature and signature to the data
-    pt_data.append((char*)&cl_sign_size, sizeof(unsigned int));
-    pt_data.append(cl_sign, cl_sign_size);
+    // sends response message to server
+    int32_t buffer_bytes; 
+    buffer_bytes = cl_pem_dim + cl_sign_size + sizeof(long) + sizeof(unsigned int) + sizeof(int32_t);
+    unsigned char* buffer = new char[buffer_bytes];
+    int32_t cursor = 0;
+    memcpy(buffer, &na, sizeof(int32_t));
+    cursor += sizeof(int);
+    memcpy(buffer + cursor, &cl_pem_dim, sizeof(long));
+    cursor += sizeof(long);
+    memcpy(buffer + cursor, cl_pem_buffer, cl_pem_dim);
+    cursor += cl_pem_dim;
+    memcpy(buffer + cursor, &cl_sign_size, sizeof(unsigned int));
+    cursor += sizeof(unsigned int);
+    memcpy(buffer + cursor, cl_sign, cl_sign_size);
+    
+    send_to_sv(first_key_negotiation_code, sockfd, buffer, buffer_bytes, counter_AS_mtx, counterAS, sv_key);
+    free(cl_sign);
+    free(buffer);
 
-    aes_gcm_encrypt(sv_key,pt_data,&m.ct,&m.ct_tag);
-
-    //size of the encrypted message 
-    m.size_ct = strlen(m.ct) +1;
-
-    send(socket_out,m);
-
-    *counterAS++;
-
-    counter_mtx->unlock();
 };
 
 // function that handles the recieved diffie-hellmann key of the peer and sends a newly generated dh key; it also computes the peer session key
-void first_key_negotiation(string data, unsigned char* sv_key, unsigned char** peer_session_key,int na, EVP_PKEY* cl_pr_key,EVP_PKEY* peer_public_key,int socket_out,int* counterAS,mutex* counter_mtx){
+void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned char** peer_session_key, int nb, EVP_PKEY* cl_pr_key, EVP_PKEY* peer_public_key, int sockfd, int* counterAS, mutex* counter_AS_mtx){
     //gets the nonce to include in the signature of the reply msg for peer
-    int nb;
-    string_to_char((char*)&nb, &data,size_of(int));
+    int32_t nb;
+    memcpy(&nb, data, size_of(int32_t));
 
     //gets the size of the peer pem file
     long peer_pem_size;
-    string_to_char((char*)&peer_pem_size, &data, sizeof(long));
+    memcpy(&peer_pem_size, data, sizeof(long));
 
     //gets the peer pem file
     char* temp = new char[peer_pem_size];
-    string_to_char(temp, &data, peer_pem_size);
+    memcpy(temp, data, peer_pem_size);
     BIO* peer_pem = BIO_new(BIO_s_mem());
     BIO_write(peer_pem, temp, peer_pem_size);
 
     //gets the size of the signature
     unsigned int peer_sign_size;
-    string_to_char((char*)&peer_sign_size, &data, sizeof(unsigned int));
+    memcpy(&peer_sign_size, data, sizeof(unsigned int));
 
     //gets the signature
     char* peer_sign = new char[peer_sign_size];
-    string_to_char(peer_sign, &data, peer_sign_size);
+    memcpy(peer_sign, data, peer_sign_size);
 
-   // extracts diffie hellmann server public key received in PEM format
+   // extracts diffie hellmann peer public key received in PEM format
     EVP_PKEY* peer_dh_pubkey = NULL;
 	peer_dh_pubkey = PEM_read_bio_PUBKEY(peer_pem,NULL,NULL,NULL);
 	char* peer_pem_buffer;
@@ -256,9 +176,6 @@ void first_key_negotiation(string data, unsigned char* sv_key, unsigned char** p
 
     if(!verify_sign(peer_public_key, peer_pem_buffer, na, peer_pem_size, peer_sign, peer_sign_size))
         error(INVALID_KEY_NEGOTIATION);
-
-    //sends signed nonce and dh key
-    counter_mtx->lock();
 
     // load elliptic curve parameters
     EVP_PKEY* dh_params;
@@ -282,52 +199,42 @@ void first_key_negotiation(string data, unsigned char* sv_key, unsigned char** p
     EVP_PKEY_keygen(kg_ctx,&cl_dh_prvkey);
     EVP_PKEY_CTX_free(kg_ctx);
 
-    // save public key in pem format in a memory BIO
+    // save client public key in pem format in a memory BIO
     BIO* cl_dh_pubkey_pem = BIO_new(BIO_s_mem());
     int ret = PEM_write_bio_PUBKEY(cl_dh_pubkey_pem,cl_dh_prvkey);
 
     if(ret==0)
         error(PEM_SERIALIZATION);
 
-    message m; // message 9
-    string pt_data = "";
-    char* buffer = (char*) &second_key_negotiation_code;
-    pt_data.append(buffer, sizeof(int32_t));
-    buffer = (char*) counterAS;
-    pt_data.append(buffer, sizeof(int32_t));
-
-    // send the public key in pem format in clear 
+    // sends the public key in pem format in clear 
     // and signed in combination with received nonce 
+    
+    // signature of nonce and pem
     char* cl_pem_buffer;
     long cl_pem_dim = BIO_get_mem_data(cl_dh_pubkey_pem,&cl_pem_buffer);
-    
     char* pt = new char[cl_pem_dim+sizeof(int32_t)];
-
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
-    buffer = (char*) &cl_pem_dim;
-    pt_data.append(buffer, sizeof(long));
-    pt_data.append(cl_pem_buffer, cl_pem_dim);
-    buffer = (char*) &nb;
-    memcpy(pt, buffer, sizeof(int32_t));
+    memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
     char* cl_sign;
-    unsigned int cl_sign_size;
+	unsigned int cl_sign_size;
+    signature(cl_pr_key,pt,&cl_sign,pt.length(),&cl_sign_size);
 
-    // signature of nonce and pem
-    signature(cl_pr_key,pt,&cl_sign,pt.length,&cl_sign_size);
-    //adding size of signature and signature to the data
-    pt_data.append((char*)&cl_sign_size, sizeof(unsigned int));
-    pt_data.append(cl_sign, cl_sign_size);
-
-    aes_gcm_encrypt(sv_key,pt_data,&m.ct,&m.ct_tag);
-
-    //size of the encrypted message 
-    m.size_ct = strlen(m.ct) +1;
-
-    send(socket_out,m);
-
-    *counterAS++;
-
-    counter_mtx->unlock();
+    // sends response message to server
+    int32_t buffer_bytes; 
+    buffer_bytes = cl_pem_dim + cl_sign_size + sizeof(long) + sizeof(unsigned int);
+    unsigned char* buffer = new char[buffer_bytes];
+    int32_t cursor = 0;
+    memcpy(buffer, &cl_pem_dim, sizeof(long));
+    cursor += sizeof(long);
+    memcpy(buffer + cursor, cl_pem_buffer, cl_pem_dim);
+    cursor += cl_pem_dim;
+    memcpy(buffer + cursor, &cl_sign_size, sizeof(unsigned int));
+    cursor += sizeof(unsigned int);
+    memcpy(buffer + cursor, cl_sign, cl_sign_size);
+    
+    send_to_sv(second_key_negotiation_code, sockfd, buffer, buffer_bytes, counter_AS_mtx, counterAS, sv_key);
+    free(cl_sign);
+    free(buffer);
 
     // session key derivation
     EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(cl_dh_prvkey, NULL);
@@ -360,25 +267,25 @@ void first_key_negotiation(string data, unsigned char* sv_key, unsigned char** p
 };
 
 //function that handles the recieved diffie-hellmann key from peer; client has previously computed its dh key, and can generate the peer session key
-void second_key_negotiation(string data, EVP_PKEY* cl_dh_prvkey,unsigned char** peer_session_key,int nb, EVP_PKEY* cl_pr_key,EVP_PKEY* peer_public_key){
+void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigned char** peer_session_key, int nb, EVP_PKEY* cl_pr_key, EVP_PKEY* peer_public_key){
     
     //gets the size of the peer pem file
     long peer_pem_size;
-    string_to_char((char*)&peer_pem_size, &data, sizeof(long));
+    memcpy(&peer_pem_size, data, sizeof(long));
 
     //gets the peer pem file
     char* temp = new char[peer_pem_size];
-    string_to_char(temp, &data, peer_pem_size);
+    memcpy(temp, data, peer_pem_size);
     BIO* peer_pem = BIO_new(BIO_s_mem());
     BIO_write(peer_pem, temp, peer_pem_size);
 
     //gets the size of the signature
     unsigned int peer_sign_size;
-    string_to_char((char*)&peer_sign_size, &data, sizeof(unsigned int));
+    memcpy(&peer_sign_size, data, sizeof(unsigned int));
 
     //gets the signature
     char* peer_sign = new char[peer_sign_size];
-    string_to_char(peer_sign, &data, peer_sign_size);
+    memcpy(peer_sign, data, peer_sign_size);
 
    // extracts diffie hellmann server public key received in PEM format
     EVP_PKEY* peer_dh_pubkey = NULL;
@@ -423,6 +330,7 @@ void second_key_negotiation(string data, EVP_PKEY* cl_dh_prvkey,unsigned char** 
 void closed_chat(bool* chatting){
     //closes chat with peer 
     chatting = false;
+    cout << "Your chatting partner has closed the chat. If you want to keep chatting, find another partner." << endl;
 };
 
 //function that handles forced logout from server in case of counters overflow
@@ -435,48 +343,27 @@ void forced_logout(int sockfd){
 };
 
 // function that handles received list of available users from server
-void list(string data){
+void list(unsigned char* data){
     //prints out the list of available users received from server
     cout << data << endl;
 };
 
 // function that handles a message receieved from peer
-void peer_message_received(string message, int* counterBA, unsigned char* peer_session_key){
+void peer_message_received(unsigned char* message, int32_t message_dim, int* counterBA, unsigned char* peer_session_key){
+    
+    Message* m_from_peer = new Message();
 
-    // in the data field we have a message for the peer, which will have the size in the clear and the rest encrypted with the peer_session_key
-    int opcode;
-    int counter;
-    int size_ct;
-    long double ct_tag;
-    char* temp;
-    string ct;
-    string pt;
-    string data;
+    int32_t total_size;
+    memcpy(&total_size, message, sizeof(int32_t));
+    m_from_peer->Decode_message(message+sizeof(int32_t), total_size, peer_session_key);
 
-    string_to_char((char*)&size_ct, &message, size_of(int));
-    temp = new char[size_ct];
-    string_to_char(temp, &message, size_ct);
-    ct.append(temp, size_ct);
-    string_to_char((char*)&ct_tag, &message, size_of(long double));
+    if(m_from_peer->GetOpCode() != peer_message_code || m_from_peer->GetCounter != *counterBA)
+        error(MESSAGE_FROM_PEER)
 
-    //decrypts message from peer
-    if(!aes_gcm_decrypt(peer_session_key, ct, &pt, ct_tag))
-        error(INVALID_MESSAGE);
-
-    string_to_char((char*) &opcode, &pt, sizeof(int32_t));
-    string_to_char((char*) &counter, &pt, sizeof(int32_t));
-
-    strcpy(data,pt);
-
-    if(*opcode == peer_message_code && counter == *counterBA){
-        //prints out the message received from peer
-        cout << data << endl;
-        //adds message count to the ones received from the server
-        *counterBA++;
-    } else
-        //error if the message opcode isn't the one sent for peer message, or if the counters aren't the same
-        error(PEER_MESSAGE_CODE);
-
+    unsigned char* buffer;
+    int32_t buffer_bytes;
+    buffer = m_from_peer->getData(&buffer_bytes);
+    cout << buffer << endl;
     
 };
 
@@ -488,42 +375,35 @@ void received_msg_handler(){
 
     while(true){
         
-        message m = receive_message(socket_in);
+        // gets message from server
+        int32_t nbytes;
+        char* buffer;
+	    int32_t buffer_bytes;
+        // reads first 4 bytes to get message length
+	    nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
+        if(nbytes != sizeof(int32_t) || buffer_bytes < 0)
+		    error(RECEIVED_MESSAGE);
+        // reads rest of the message 
+        buffer = new char[buffer_bytes];
+        nbytes = recv(sockfd, buffer, buffer_bytes, 0);
+	    if(nbytes != buffer_bytes)
+		    error(RECEIVED_MESSAGE);
 
-        int opcode;
-        int counter;
-        int size_ct;
-        int na;
-        int nb;
-        long double ct_tag;
-        string ct;
-        string pt;
-        string data;
-
-        memcpy(&size_ct, &m, sizeof(int32_t));
-        ct.append((char*)(&m)+4, size_ct);
-        memcpy(&ct_tag, (&m)+4+size_ct, 16);
-
-        //decrypts message from server
-        if(!aes_gcm_decrypt(sv_session_key, ct, &pt, ct_tag))
-            error(INVALID_MESSAGE);
-
-        string_to_char((char*) &opcode,  &pt, sizeof(int32_t));
-        string_to_char((char*) &counter, &pt, sizeof(int32_t));
-
-        strcpy(data,pt);
-
+        Message* rcv_msg = new Message();
+        rcv_msg->Decode_message(buffer, buffer_bytes, sv_session_key);
+        int32_t data_dim;
+        unsigned char* data = rcv_msg->getData(data_dim);
         //reads the counter in the message and checks it's the same as counterS of the messages received from server
-        if(counter == *counterSA){
+        if(rcv_msg->GetCounter == *counterSA){
             //adds message count to the ones received from the server
             *counterSA++;
             //checks message header to choose which function to call based on the type of message received
-            switch(opcode)
-                case user_want_to_chat_code:
-                user_want_to_chat(data,socket_out,&counterAS,&counter_mtx);
+            switch(rcv_msg->GetOpCode)
+                case chat_request_received_code:
+                chat_request_received(data, sockfd, sv_session_key, counterAS, counter_AS_mtx);
 
                 case chat_request_accepted_code: // from server message 4 to alice
-                chat_request_accepted(data,sv_session_key,&na,cl_pr_key,&peer_public_key,socket_out,&counterAS,&counter_mtx);
+                chat_request_accepted(data, sv_session_key, &na, cl_pr_key, &peer_public_key &counterAS, &counter_AS_mtx);
 
                 case chat_request_denied_code:
                 chat_request_denied();
@@ -532,27 +412,27 @@ void received_msg_handler(){
                 peer_public_key_msg(data,&peer_public_key);
 
                 case nonce_msg_code: // receiving 6
-                nonce_msg(data,sv_session_key,&cl_dh_prvkey,&nb,cl_pr_key,peer_public_key,socket_out,&counterAS,&counter_mtx);
+                nonce_msg(data, sv_session_key, cl_dh_prvkey, &na, cl_pr_key, sockfd, &counterAS, &counter_AS_mtx);
 
                 case first_key_negotiation_code: // receiving 8
-                first_key_negotiation(data,sv_session_key,&peer_session_key,na,cl_pr_key,peer_public_key,socket_out,&counterAS,&counter_mtx);
+                first_key_negotiation(data, sv_session_key, &peer_session_key, nb, cl_pr_key, peer_public_key, sockfd, &counterAS, &counter_AS_mtx);
 
                 case second_key_negotiation_code: // receiving 10
-                second_key_negotiation(data,cl_dh_prvkey,&peer_session_key,nb,cl_pr_key,peer_public_key);
+                second_key_negotiation(data, cl_dh_prvkey, &peer_session_key, nb, cl_pr_key, peer_public_key);
 
                 case closed_chat_code:
                 closed_chat(&chatting);
 
                 case forced_logout_code:
-                forced_logout();
+                forced_logout(sockfd);
 
                 case list_code:
-                list();
+                list(data);
 
-                case peer_message_code:
-                peer_message_received(data, &counterBA, peer_session_key);
+                case peer_message_received_code:
+                peer_message_received(data, data_dim, &counterBA, peer_session_key);
             }
         //error if the counter of received messages from server and the counter stored in the message don't correspond
-        else error(counter);
+        else error(COUNTER);
     }
 };
