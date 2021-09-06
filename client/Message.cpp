@@ -128,11 +128,12 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     memcpy(data_buffer, buffer+cursor, data_size_buffer);
     cursor += data_size_buffer;
     unsigned char* iv_buffer = (unsigned char *)malloc(12);
-    memcpy(iv_buffer, buffer+cursor, 12);
-    cursor += 12;
     unsigned char* tag_buffer = (unsigned char *)malloc(16);
     memcpy(tag_buffer, buffer+cursor, 16);
     cursor += 16;
+    memcpy(iv_buffer, buffer+cursor, 12);
+    cursor += 12;
+
 
     // decryption
     unsigned char* pt_buffer;

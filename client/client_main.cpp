@@ -41,60 +41,9 @@ const EVP_MD* md = EVP_sha256();
 const string ADDRESS = "localhost";
 const string PORT = "9034";
 
-// function to send message
-void send(int sockfd,message m);
-
-
 // TODO: function handling errors 
 
 void error(int code);
-
-// function that sends message to peer
-void send_to_peer(int sockfd,string input_buffer,mutex* counter_mtx,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
-	counter_mtx->lock();
-
-	message m_to_peer;
-	message m;
-
-	// preparation of the message for the peer encrypted with the peer session key
-	string pt_to_peer = "";
-	char* buffer = (char*) &peer_message_code;
-	pt_to_peer.append(buffer, sizeof(int32_t));
-	char* buffer = (char*) counterAB;
-	pt_to_peer.append(buffer, sizeof(int32_t));
-	pt_to_peer.append(input_buffer);
-
-	aes_gcm_encrypt(peer_key,pt_to_peer,&m_to_peer.ct,&m_to_peer.ct_tag);
-
-	//size of the encrypted message 
-	m_to_peer.size_ct = strlen(m_to_peer.ct) +1;
-
-	//after encrypting the message for the peer, it gets encapsulated in the message for the server
-	string pt = "";
-	char* buffer = (char*) &peer_message_code;
-	pt.append(buffer, sizeof(int32_t));
-	char* buffer = (char*) counterAS;
-	pt.append(buffer, sizeof(int32_t));
-	char* buffer = (char*) &m_to_peer.size_ct;
-	pt.append(buffer, sizeof(int32_t));
-	pt.append(m_to_peer.ct);
-	char* buffer = (char*) &m_to_peer.ct_tag;
-	pt.append(buffer, sizeof(long double));
-
-	aes_gcm_encrypt(sv_key,pt,&m.ct,&m.ct_tag);
-
-	//size of the encrypted message 
-	m.size_ct = strlen(m.ct) +1;
-
-	send(sockfd,m);
-
-	*counterAB++;
-	*counterAS++;
-
-	counter_mtx->unlock();
-
-
-};
 
 int main(){
 
@@ -155,7 +104,8 @@ int main(){
 	auth(cl_id, cl_pr_key, cl_pub_key, sockfd, sv_session_key);
 
 	//initialization of mutex and counters for messages
-	mutex counter_mtx;
+	static mutex counter_AS_mtx;
+	static mutex counter_AB_mtx;
 	static unsigned int counterAS = 0;
 	static unsigned int counterSA = 0;
 	static unsigned int counterAB = 0;
@@ -173,7 +123,7 @@ int main(){
 		
 		//checks if the first word is a command
 		if (!chatting & first_word.compare(list_request_cmd))
-			send_to_sv(list_request_code, sockfd, NULL, 0,&counter_mtx,&counterAS,sv_session_key);
+			send_to_sv(list_request_code, sockfd, NULL, 0,&counter_AS_mtx,&counterAS,sv_session_key);
 		else if (!chatting & first_word.compare(chat_request_cmd)){
 			if(input_buffer.size() < 6)
 				error(chat_request_code);
@@ -183,21 +133,21 @@ int main(){
 				string recipient = input_buffer.substr(5,input_buffer.find(' '));
 				ss << recipient;
 				ss >> recipient_id;
-				send_to_sv(chat_request_code, sockfd, recipient_id.c_str(),recipient_id.size()+1,&counter_mtx,&counterAS,sv_session_key);
+				send_to_sv(chat_request_code, sockfd, recipient_id.c_str(),recipient_id.size()+1,&counter_AS_mtx,&counterAS,sv_session_key);
 			}
 		}
 		else if (first_word.compare(logout_cmd)){
-			send_to_sv(logout_code, sockfd, NULL, 0,&counter_mtx,&counterAS,sv_session_key);
+			send_to_sv(logout_code, sockfd, NULL, 0,&counter_AS_mtx,&counterAS,sv_session_key);
 			close(sockfd);
 			exit(-2);
 		}
 		else if (first_word.compare(end_chat_cmd)){
-			send_to_sv(end_chat_code, sockfd, NULL, 0,&counter_mtx,&counterAS,sv_session_key);
+			send_to_sv(end_chat_code, sockfd, NULL, 0,&counter_AS_mtx,&counterAS,sv_session_key);
 			chatting = false;
 		}
 		//there is no command, so if chatting is true it's a message for the peer	
 		else if(chatting)
-			send_to_peer(sockfd,input_buffer,&counter_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
+			send_to_peer(sockfd,input_buffer.c_str(),input_buffer.size()+1,&counter_AS_mtx,&counter_AB_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
 	}
 	return 0;
 }
