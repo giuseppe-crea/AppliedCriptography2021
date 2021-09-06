@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "aes_base_support.cpp"
+#include "ClientElement.hpp"
 
 const int32_t STATIC_POSTFIX = 28;
 	
@@ -13,6 +14,7 @@ Message::Message()
     this->data = NULL;
     this->ct = NULL;
     this->ct_tag = NULL;
+    this->data_dim = 0;
 }
 	
 Message::~Message()
@@ -72,19 +74,25 @@ int32_t Message::GetOpCode(){
 }
 
 int32_t Message::setData(void* buffer, int32_t buffer_dim){
-    if(buffer == NULL)
-        return -1;
+    if(buffer == NULL){
+        this->data = NULL;
+        this->data_dim = 0;
+        return 0;
+    }
     this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
     memcpy(this->data, buffer, buffer_dim);
+    this->data_dim = buffer_dim;
     return 0;
 }
 
-unsigned char* Message::getData(int* datadim){
+int32_t Message::getData(unsigned char* buffer, int32_t* datadim){
     if(this->data != NULL){
         *datadim = this->data_dim;
-        return this->data;
+        buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char));
+        memcpy(buffer, this->data, this->data_dim);
+        return 0;
     }else
-        return NULL;
+        return 1;
 }
 
 int32_t Message::Encode_message(unsigned char* key){
@@ -98,14 +106,18 @@ int32_t Message::Encode_message(unsigned char* key){
     cursor += sizeof(int32_t);
     memcpy(pt+cursor, &this->counter, sizeof(int32_t));
     cursor += sizeof(int32_t);
-    memcpy(pt+cursor, this->data, this->data_dim);
-    cursor += this->data_dim;
+    if(this->data_dim != 0){
+        memcpy(pt+cursor, this->data, this->data_dim);
+        cursor += this->data_dim;
+    }
 
     if(!this->SetCtLen(gcm_encrypt(pt, cursor, NULL, NULL, key, this->iv, 12, this->ct, this->ct_tag)))
         return -1;
     return 0;
 }
 
+// when receiving an unencrypted message
+// sets opcode and data buffer in the Message object
 int32_t Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
     int32_t cursor = 0;
     int32_t opCode;
@@ -153,7 +165,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 }
 
 // serializes the data to be sent from the fields of Message object
-int32_t Message::SendMessage(int socketID, int* counter){
+int32_t Message::SendMessage(int socketID, ClientElement* target){
     int32_t cursor = 0;
     int32_t totalSize = this->ct_len + STATIC_POSTFIX;
     // init a buffer for the data
@@ -171,7 +183,7 @@ int32_t Message::SendMessage(int socketID, int* counter){
     memcpy(buffer+cursor, this->iv, 12);
     cursor += 12;
     if(send(socketID, buffer, cursor, 0)){
-        *counter++;
+        target->IncreaseCounterTo();
         return 0;
     }else 
         return -1;

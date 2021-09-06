@@ -13,9 +13,12 @@
 #include <map>
 #include <ClientElement.hpp>
 #include "Message.hpp"
+#include "OpCodes.h"
 
 #define PORT "9034"   // port we're listening on
-std::map<int, ClientElement*> connectedClients;
+// two maps that point to the same clientelement objects
+std::map<int, ClientElement*> connectedClientsBySocket;
+std::map<std::string, ClientElement*> connectedClientsByUsername;
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -27,8 +30,77 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void HandleMessage(Message* message){
-    //switch(opCode) case 1:
+void HandleMessage(Message* message, int socket){
+    int32_t data_buf_len = 0;
+    bool error = false;
+    switch(message->GetOpCode()) {
+        case first_auth_msg_code:
+            // very first message of an authentication procedure
+            // data contains, in order:
+            // nonce, username
+            int32_t nonce_user = -1;
+            unsigned char* data_buffer = NULL;
+            if(!message->getData(data_buffer, &data_buf_len)){
+                // copy sizeof(int32_t) bytes from buffer to nonce
+                memcpy(&nonce_user, data_buffer, sizeof(int32_t));
+                // copy data_buf_len - sizeof(int32_t) bytes into username
+                std::string username(reinterpret_cast<char*>(data_buffer+sizeof(int32_t)), data_buf_len - sizeof(int32_t));
+                // find the relevant client object by socket id
+                auto tmpIterator = connectedClientsBySocket.find(socket);
+                // add a mapping (username, clientelement) for this user
+                if(tmpIterator != connectedClientsBySocket.end()){
+                    connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, tmpIterator->second));
+                    tmpIterator->second->SetUsername(username);
+                    tmpIterator->second->SetNonceReceived(nonce_user);
+                }
+                else{
+                    perror("first auth message: no client object for this socket id, how did we get here?");
+                    error = true;
+                }
+            } else{
+                perror("first auth message: getdata");
+                error = true;
+            }
+
+            // must send the 2nd auth message to the client
+            // opCode = second_auth_msg_code
+            // data contains, in order:
+            // [int32_t] server nonce; [long] size of PEM; [size of PEM] PEM DH-S; 
+            // [int32_t] size signature(pem+nonce); [size of signature] signature(pem+ nonce);
+            // [tot size so far - size] server-cert
+
+            break;
+            
+        case final_auth_msg_code:
+            // data contains, in order:
+            // [long] size of pem; [size of pem] PEM; [uint] signature size; [signature size] signature
+            unsigned char* data_buffer = NULL;
+            int pem_dim;
+            
+            if(!message->getData(data_buffer, &data_buf_len)){
+                int32_t cursor = 0;
+                long pem_dim;
+                unsigned int cl_sign_size;
+                memcpy(&pem_dim, data_buffer, sizeof(long));
+                cursor += sizeof(long);
+                char* buffer = new char[pem_dim];
+                memcpy(&buffer, data_buffer+ cursor, pem_dim);
+                cursor += pem_dim;
+                memcpy(&cl_sign_size, data_buffer+ cursor, sizeof(unsigned int));
+                cursor += sizeof(unsigned int);
+                char* cl_sign = new char[cl_sign_size];
+                memcpy(&cl_sign, data_buffer+ cursor, cl_sign_size);
+
+                // run key derivation on this data
+                // save session key to clientelement object
+
+                // Do we need to reply anything?
+            }
+        break;
+
+        
+    }
+
     // read int32_t nonce
 
     // read msg_len_buf - 2*sizeof(int32_t) unsigned char* userID
@@ -148,7 +220,7 @@ int main(void)
                         // create a new client element for this client
                         ClientElement *newClient = new ClientElement();
                         // add it to the client-socket map
-                        connectedClients.insert(std::pair<int, ClientElement*>(newfd, newClient));
+                        connectedClientsBySocket.insert(std::pair<int, ClientElement*>(newfd, newClient));
                     }
                 } else {
                     // handle data from a client
@@ -162,11 +234,33 @@ int main(void)
                         }
                         close(i); // bye!
                         // removing from connectedClients and deleting the client object
-                        auto tmpIterator = connectedClients.find(i);
-                        if(tmpIterator != connectedClients.end())
+                        auto tmpIterator = connectedClientsBySocket.find(i);
+                        if(tmpIterator != connectedClientsBySocket.end())
                         {
+                            // alerting a potential chat partner that this user disconnected
+                            std::string partnerName = tmpIterator->second->GetPartnerName();
+                            //TODO: instantiate and send "your partner disconnected" message
+                            Message* message = new Message();
+                            message->SetOpCode(closed_chat_code);
+                            auto tmpPartnerIterator = connectedClientsByUsername.find(partnerName);
+                            ClientElement* chatPartner = tmpPartnerIterator->second;
+                            message->SetCounter(chatPartner->GetCounterTo());
+                            message->setData(NULL, 0);
+                            message->Encode_message(chatPartner->GetSessionKey());
+                            message->SendMessage(chatPartner->GetSocketID(), chatPartner);
+
+                            std::string tmpUsername = tmpIterator->second->GetUsername();
+                            if(!tmpUsername.empty()){
+                                // this user has a username, it must have exchanged at least one message with us
+                                // we can find the corresponding user object
+                                auto usernameIterator = connectedClientsByUsername.find(tmpUsername);
+                                if(usernameIterator != connectedClientsByUsername.end()){
+                                    connectedClientsByUsername.erase(usernameIterator);
+                                } else
+                                    perror("While cleaning a timed out connection, user Object had a non-empty username but no corresponding entry in ConnectedClientsByUsername was found.");
+                            }
                             delete(tmpIterator->second);
-                            connectedClients.erase(tmpIterator);
+                            connectedClientsBySocket.erase(tmpIterator);
                         }
                         FD_CLR(i, &master); // remove from master set
                     } else {
@@ -184,15 +278,15 @@ int main(void)
                         if(!encrypted_message){
                             Message* message = new Message();
                             message->Unwrap_unencrypted_message(msg_buf, msg_len_buf);
-                            HandleMessage(message);
+                            HandleMessage(message, i);
                             delete(message);                            
                         } else {
                             Message* message = new Message();
-                            auto tmpIterator = connectedClients.find(i);
-                            if(tmpIterator != connectedClients.end())
+                            auto tmpIterator = connectedClientsBySocket.find(i);
+                            if(tmpIterator != connectedClientsBySocket.end())
                             {
                                 message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey());
-                                HandleMessage(message);
+                                HandleMessage(message, i);
                             }
                             delete(message);  
                         }
