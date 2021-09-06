@@ -73,10 +73,10 @@ void peer_public_key_msg(unsigned char* data, EVP_PKEY** peer_public_key){
 }
 
 // function that handles recieved nonce from peer: it generates diffie-hellmann key and sends it to peer
-void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvkey, int32_t* nb, EVP_PKEY* cl_pr_key, int sockfd, int* counterAS, mutex* counter_AS_mtx){
+void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvkey, int32_t* na, EVP_PKEY* cl_pr_key, int sockfd, int* counterAS, mutex* counter_AS_mtx){
     //gets a nonce in the clear
-    int32_t na;
-    memcpy(&na, data, size_of(int32_t));
+    int32_t nb;
+    memcpy(&nb, data, size_of(int32_t));
 
     //sends a new nonce, signed nonce and dh key as an automatic reply
     
@@ -109,7 +109,7 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
         error(PEM_SERIALIZATION);
 
     // computes random nonce
-    RAND_bytes(nb, sizeof(int32_t));
+    RAND_bytes(na, sizeof(int32_t));
 
     // sends the public key in pem format in clear 
     // and signed in combination with received nonce 
@@ -119,7 +119,7 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
     long cl_pem_dim = BIO_get_mem_data(cl_dh_pubkey_pem,&cl_pem_buffer);
     char* pt = new char[cl_pem_dim+sizeof(int32_t)];
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
-    memcpy(pt+cl_pem_dim, &na, sizeof(int32_t));
+    memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
     char* cl_sign;
 	unsigned int cl_sign_size;
     signature(cl_pr_key,pt,&cl_sign,cl_pem_dim+sizeof(int32_t),&cl_sign_size);
@@ -129,7 +129,7 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
     buffer_bytes = cl_pem_dim + cl_sign_size + sizeof(long) + sizeof(unsigned int) + sizeof(int32_t);
     unsigned char* buffer = new char[buffer_bytes];
     int32_t cursor = 0;
-    memcpy(buffer, nb, sizeof(int32_t));
+    memcpy(buffer, na, sizeof(int32_t));
     cursor += sizeof(int);
     memcpy(buffer + cursor, &cl_pem_dim, sizeof(long));
     cursor += sizeof(long);
@@ -275,7 +275,7 @@ void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned 
 };
 
 //function that handles the recieved diffie-hellmann key from peer; client has previously computed its dh key, and can generate the peer session key
-void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigned char** peer_session_key, int nb, EVP_PKEY* cl_pr_key, EVP_PKEY* peer_public_key){
+void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigned char** peer_session_key, int na, EVP_PKEY* cl_pr_key, EVP_PKEY* peer_public_key){
     
     //gets the size of the peer pem file
     long peer_pem_size;
@@ -301,7 +301,7 @@ void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigne
 	char* peer_pem_buffer;
 	peer_pem_size = BIO_get_mem_data(peer_pem,&peer_pem_buffer);
 
-    if(!verify_sign(peer_public_key, peer_pem_buffer, nb, peer_pem_size, peer_sign, peer_sign_size))
+    if(!verify_sign(peer_public_key, peer_pem_buffer, na, peer_pem_size, peer_sign, peer_sign_size))
         error(INVALID_KEY_NEGOTIATION);
 
     // session key derivation
@@ -423,13 +423,13 @@ void received_msg_handler(){
                 peer_public_key_msg(data,&peer_public_key);
 
                 case nonce_msg_code: // receiving 6
-                nonce_msg(data, sv_session_key, cl_dh_prvkey, &nb, cl_pr_key, sockfd, &counterAS, &counter_AS_mtx);
+                nonce_msg(data, sv_session_key, cl_dh_prvkey, &na, cl_pr_key, sockfd, &counterAS, &counter_AS_mtx);
 
                 case first_key_negotiation_code: // receiving 8
                 first_key_negotiation(data, sv_session_key, &peer_session_key, na, cl_pr_key, peer_public_key, sockfd, &counterAS, &counter_AS_mtx);
 
                 case second_key_negotiation_code: // receiving 10
-                second_key_negotiation(data, cl_dh_prvkey, &peer_session_key, nb, cl_pr_key, peer_public_key);
+                second_key_negotiation(data, cl_dh_prvkey, &peer_session_key, na, cl_pr_key, peer_public_key);
 
                 case closed_chat_code:
                 closed_chat(&chatting);
