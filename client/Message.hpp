@@ -28,7 +28,7 @@ class Message
 		unsigned char* ct_tag; //long long should have size 16 byte, 128 bit
 		unsigned char* getData(int* datadim);
 		int32_t setData(void* buffer, int32_t buffer_dim);
-		int32_t SendMessage(int socketID, int* counter);
+		int32_t SendMessage(int socketID, unsigned int* counter);
 		int32_t SendUnencryptedMessage(int socketID);
 		int32_t Encode_message(unsigned char* key);
 		int32_t Unwrap_unencrypted_message(unsigned char* buffer, int32_t buff_len);

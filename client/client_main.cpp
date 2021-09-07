@@ -22,7 +22,7 @@ const int list_request_code = 374;
 const int list_code = 375;
 
 const int peer_message_code = 350;
-const int peer_message_receieved_code = 351;
+const int peer_message_received_code = 351;
 
 // client commands
 
@@ -113,7 +113,7 @@ int main(){
 	string input_buffer;
 
 	//creation of thread handling receieved messages
-	thread receiving (received_msg_handler); 
+	thread receiving (received_msg_handler, sockfd); 
 
 	//loop that analyzes input from user
 	while(true){
@@ -151,3 +151,4 @@ int main(){
 	}
 	return 0;
 }
+

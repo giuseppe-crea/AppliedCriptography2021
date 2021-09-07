@@ -3,7 +3,7 @@
 // functions handling different messages
 // function to handle chat request message
 
-void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_dim,mutex* counter_AS_mtx,unsigned int* counterAS,unsigned char* sv_key){
+void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_dim,mutex* counter_AS_mtx, unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
 
 	counter_AS_mtx->lock();
@@ -13,18 +13,18 @@ void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_di
 	// prepare data
 
     if(!m->SetOpCode(opcode))
-        error(OPCODE_ERROR);
+        perror("OPCODE_ERROR");
     if(!m->SetCounter(*counterAS))
-        error(COUNTER_ERROR);
+        perror("COUNTER_ERROR");
     if(data!=NULL) 
-	    if(!m->setData(data,data_dim)
-            error(DATA_ERROR);
+	    if(!m->setData(data,data_dim))
+            perror("DATA_ERROR");
 
     // encrypts and sends  the message
     if(!m->Encode_message(sv_key))
-        error(ENCODING_ERROR);
+        perror("ENCODING_ERROR");
     if(!m->SendMessage(sockfd,counterAS))
-        error(SENDING_ERROR);
+        perror("SENDING_ERROR");
 
 	counter_AS_mtx->unlock();
 }
@@ -39,30 +39,30 @@ void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* counte
 	// prepare data
 
     if(!m_to_peer->SetOpCode(peer_message_code))
-        error(OPCODE_ERROR);
-    if(!m->SetCounter(*counterAB))
-        error(COUNTER_ERROR);
+        perror("OPCODE_ERROR");
+    if(!m_to_peer->SetCounter(*counterAB))
+        perror("COUNTER_ERROR");
     if(data!=NULL) 
-	    if(!m->setData(data,data_dim)
-            error(DATA_ERROR);
+	    if(!m_to_peer->setData(data,data_dim))
+            perror("DATA_ERROR");
     
     // first encryption with peer key 
-    if(!m->Encode_message(peer_key))
-        error(ENCODING_ERROR);
+    if(!m_to_peer->Encode_message(peer_key))
+        perror("ENCODING_ERROR");
 
     int32_t buffer_bytes = sizeof(int32_t) + m_to_peer->ct_len + STATIC_POSTFIX;
     unsigned char* buffer = (unsigned char*)malloc(buffer_bytes);
     int32_t cursor = 0;
 
-    int32_t total_size = m_to_peer.ct_len + STATIC_POSTFIX;
+    int32_t total_size = m_to_peer->ct_len + STATIC_POSTFIX;
 
     memcpy(buffer,&total_size,sizeof(int32_t));
     cursor += sizeof(int32_t);
-    memcpy(buffer + cursor,m_to_peer.ct,m_to_peer.ct_len);
-    cursor += m_to_peer.ct_len;
-    memcpy(buffer + cursor,m_to_peer.ct_tag,16);
+    memcpy(buffer + cursor,m_to_peer->ct,m_to_peer->ct_len);
+    cursor += m_to_peer->ct_len;
+    memcpy(buffer + cursor,m_to_peer->ct_tag,16);
     cursor += 16;
-    memcpy(buffer + cursor,m_to_peer.GetIV(),12);
+    memcpy(buffer + cursor,m_to_peer->GetIV(),12);
     cursor += 12;
 
     send_to_sv(peer_message_code,sockfd,buffer,buffer_bytes,counter_AS_mtx,counterAS,sv_key);

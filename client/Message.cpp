@@ -73,10 +73,14 @@ int32_t Message::GetOpCode(){
 }
 
 int32_t Message::setData(void* buffer, int32_t buffer_dim){
-    if(buffer == NULL)
-        return -1;
+    if(buffer == NULL){
+        this->data = NULL;
+        this->data_dim = 0;
+        return 0;
+    }
     this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
     memcpy(this->data, buffer, buffer_dim);
+    this->data_dim = buffer_dim;
     return 0;
 }
 
@@ -155,7 +159,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 }
 
 // serializes the data to be sent from the fields of Message object
-int32_t Message::SendMessage(int socketID, int* counter){
+int32_t Message::SendMessage(int socketID, unsigned int* counter){
     int32_t cursor = 0;
     int32_t totalSize = this->ct_len + STATIC_POSTFIX;
     // init a buffer for the data

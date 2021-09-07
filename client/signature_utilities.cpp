@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 // signs the plaintext with private key
-bool signature(EVP_KEY* cl_pr_key, char* pt, unsigned char** sign, int length, unsigned int* sign_size){
+bool signature(EVP_PKEY* cl_pr_key, unsigned char* pt, unsigned char** sign, int length, unsigned int* sign_size){
 	int ret;
 
 	// creates the signature context:
@@ -40,7 +40,7 @@ bool signature(EVP_KEY* cl_pr_key, char* pt, unsigned char** sign, int length, u
 
 
 // function to verify signature
-bool verify_sign(EVP_PKEY* pub_key, char* data, int n, long data_dim, char* sign, int sign_dim){
+bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, unsigned char* sign, int sign_dim){
 	int ret;
 
 	// creates the signature context
