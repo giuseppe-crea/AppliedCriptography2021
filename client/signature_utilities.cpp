@@ -7,6 +7,8 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <stdio.h>
+#include "constant_variables.cpp"
+using namespace std;
 
 // signs the plaintext with private key
 bool signature(EVP_PKEY* cl_pr_key, unsigned char* pt, unsigned char** sign, int length, unsigned int* sign_size){
@@ -70,8 +72,6 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 		cerr << "Error: Invalid signature!\n";
 		exit(1);
    }
-   else if (ret==1){
-	   return true;
-   }
-}
 
+	return true;
+}

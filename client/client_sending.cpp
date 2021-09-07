@@ -3,10 +3,10 @@
 // functions handling different messages
 // function to handle chat request message
 
-void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_dim,mutex* counter_AS_mtx, unsigned int* counterAS,unsigned char* sv_key){
+void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_dim,mutex* struct_mutex, unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
 
-	counter_AS_mtx->lock();
+	struct_mutex->lock();
 
     Message* m = new Message();
 
@@ -26,13 +26,12 @@ void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_di
     if(!m->SendMessage(sockfd,counterAS))
         perror("SENDING_ERROR");
 
-	counter_AS_mtx->unlock();
+	struct_mutex->unlock();
 }
 
 // function that sends message to peer
-void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* counter_AS_mtx,mutex* counter_AB_mtx,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
+void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* struct_mutex,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
 
-    counter_AB_mtx->lock();
 
     Message* m_to_peer = new Message();
 
@@ -65,10 +64,9 @@ void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* counte
     memcpy(buffer + cursor,m_to_peer->GetIV(),12);
     cursor += 12;
 
-    send_to_sv(peer_message_code,sockfd,buffer,buffer_bytes,counter_AS_mtx,counterAS,sv_key);
-
+    send_to_sv(peer_message_code,sockfd,buffer,buffer_bytes,struct_mutex,counterAS,sv_key);
+    struct_mutex->lock();
     *counterAB++;
-
-    counter_AB_mtx->unlock();
+    struct_mutex->unlock();
 
 };

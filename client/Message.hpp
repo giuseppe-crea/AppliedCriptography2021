@@ -1,6 +1,7 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 #pragma once
+#include <stdint.h>
 	
 class Message  
 {
@@ -31,7 +32,7 @@ class Message
 		int32_t SendMessage(int socketID, unsigned int* counter);
 		int32_t SendUnencryptedMessage(int socketID);
 		int32_t Encode_message(unsigned char* key);
-		int32_t Unwrap_unencrypted_message(unsigned char* buffer, int32_t buff_len);
+		void Unwrap_unencrypted_message(unsigned char* buffer, int32_t buff_len);
 		int32_t Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key);
 
 

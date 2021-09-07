@@ -1,4 +1,5 @@
-#include "client_receiving.cpp"
+#include "Message.cpp"
+#include "signature_utilities.cpp"
 
 using namespace std;
 // authentication between client and server
@@ -61,14 +62,14 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	read_dim += sizeof(int32_t);	
 	memcpy(&sv_pem_size, buffer + read_dim, sizeof(long));	
 	read_dim += sizeof(long);
-	BIO_write(sv_pem, (void*)buffer + read_dim, sv_pem_size);
+	BIO_write(sv_pem, buffer + read_dim, sv_pem_size);
 	read_dim += sv_pem_size;
 	memcpy(&sign_size, buffer + read_dim, sizeof(int32_t));
 	read_dim += sizeof(int32_t);
 	sv_sign = (unsigned char*)malloc(sign_size);
 	memcpy(sv_sign, buffer + read_dim, sign_size);
 	read_dim += sign_size;
-	BIO_write(serv_cert_pem_buffer, (void*)buffer + read_dim, buffer_bytes - read_dim);
+	BIO_write(serv_cert_pem_buffer, buffer + read_dim, buffer_bytes - read_dim);
 	PEM_read_bio_X509(serv_cert_pem_buffer, &serv_cert, NULL, NULL);
 
 	delete(second_m);

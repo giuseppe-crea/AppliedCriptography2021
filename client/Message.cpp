@@ -106,12 +106,12 @@ int32_t Message::Encode_message(unsigned char* key){
     memcpy(pt+cursor, this->data, this->data_dim);
     cursor += this->data_dim;
 
-    if(!this->SetCtLen(gcm_encrypt(pt, cursor, NULL, NULL, key, this->iv, 12, this->ct, this->ct_tag)))
+    if(!this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, this->ct, this->ct_tag)))
         return -1;
     return 0;
 }
 
-int32_t Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
+void Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
     int32_t cursor = 0;
     int32_t opCode;
     memcpy(&opCode, buffer, sizeof(int32_t));
@@ -141,7 +141,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 
     // decryption
     unsigned char* pt_buffer;
-    int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, NULL, tag_buffer, key, iv_buffer, 12, pt_buffer);
+    int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0)
         handleErrors();
     
