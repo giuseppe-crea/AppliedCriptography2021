@@ -1,4 +1,10 @@
 #include "client_sending.cpp"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
 
 // constant protocol variables
 
@@ -45,6 +51,11 @@ const string PORT = "9034";
 
 void error(int code);
 
+// TODO: Implement
+bool get_keys(string username, string password, EVP_PKEY* cl_pub_key, EVP_PKEY* cl_pr_key){
+	return true;
+}
+
 int main(){
 
 	string cl_id;
@@ -72,36 +83,36 @@ int main(){
 	unsigned char* sv_session_key;
 
 	if(!get_keys(cl_id,password,cl_pub_key,cl_pr_key))
-		error(INVALID_USER);
+		perror("INVALID_USER");
 
 	// connect to server
 
 	int sockfd, numbytes; 
 	int32_t buf_dim;
 	char* buf;
-	struct addrinfo serv_addr;
+	struct sockaddr_in serv_addr;
 	int rv;
 	char s[INET6_ADDRSTRLEN];
 
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_address.s_addr = ADDRESS;
-	serv_addr.sin_port = atoi(PORT);
+	serv_addr.sin_addr.s_addr = inet_addr(ADDRESS.c_str());
+	serv_addr.sin_port = atoi(PORT.c_str());
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
-  		error("ERROR opening socket");
+  		perror("ERROR opening socket");
 
 
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
-        error("ERROR connecting");
+        perror("ERROR connecting");
 
 
 	static bool chatting = false;
 	string peer_id;
 	
 	//authentication of the client
-	auth(cl_id, cl_pr_key, cl_pub_key, sockfd, sv_session_key);
+	auth(cl_id, cl_pr_key, cl_pub_key, sockfd, &sv_session_key, store);
 
 	//initialization of mutex and counters for messages
 	static mutex counter_AS_mtx;
@@ -133,7 +144,7 @@ int main(){
 				string recipient = input_buffer.substr(5,input_buffer.find(' '));
 				ss << recipient;
 				ss >> recipient_id;
-				send_to_sv(chat_request_code, sockfd, recipient_id.c_str(),recipient_id.size()+1,&counter_AS_mtx,&counterAS,sv_session_key);
+				send_to_sv(chat_request_code, sockfd, (unsigned char*)recipient_id.c_str(),recipient_id.size()+1,&counter_AS_mtx,&counterAS,sv_session_key);
 			}
 		}
 		else if (first_word.compare(logout_cmd)){
@@ -147,7 +158,7 @@ int main(){
 		}
 		//there is no command, so if chatting is true it's a message for the peer	
 		else if(chatting)
-			send_to_peer(sockfd,input_buffer.c_str(),input_buffer.size()+1,&counter_AS_mtx,&counter_AB_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
+			send_to_peer(sockfd, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1,&counter_AS_mtx,&counter_AB_mtx,&counterAS,&counterAB,sv_session_key,peer_session_key);
 	}
 	return 0;
 }
