@@ -15,6 +15,11 @@ class ClientElement
 		int32_t counter_from = 0;
 		int32_t counter_to = 0;
 		int32_t nonce_received = 0;
+		long tosend_dh_key_size;
+		long received_dh_key_size;
+		BIO* pub_dh_key_to_send;
+		BIO* pub_dh_key_received;
+		EVP_PKEY* pri_dh_key;
 		bool isBusy = false;
 
 	public:
@@ -38,6 +43,14 @@ class ClientElement
 		void SetCounterFrom(int32_t cnt);
 		int GetSocketID();
 		void SetSocketID(int socket);
+		EVP_PKEY* GetPrivateDHKey();
+		int SetPrivateDHKey(EVP_PKEY* key);
+		BIO* GetOurPublicDHKey();
+		int SetOurPublicDHKey(BIO* key);
+		BIO* GetPeerPublicDHKey();
+		int SetPeerPublicDHKey(BIO* key, long keysize);
+		long GetToSendPubDHKeySize();
+		long GetReceivedPubDHKeySize();
 		~ClientElement();
 
 };

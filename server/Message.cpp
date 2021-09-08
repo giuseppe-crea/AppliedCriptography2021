@@ -188,3 +188,21 @@ int32_t Message::SendMessage(int socketID, ClientElement* target){
     }else 
         return -1;
 }
+
+int32_t Message::SendUnencryptedMessage(int socketID){
+    int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
+    int32_t cursor = 0;
+    // init a buffer for the data
+    unsigned char* output_buffer = (unsigned char *)malloc(-message_dim+sizeof(int32_t));
+    memcpy(output_buffer, &message_dim, sizeof(int32_t));
+    cursor += sizeof(int32_t);
+    memcpy(output_buffer+cursor, &this->op_code, sizeof(int32_t));
+    cursor += sizeof(int32_t);
+    memcpy(output_buffer+cursor, this->data, this->data_dim);
+    cursor += this->data_dim;
+
+    if(send(socketID, output_buffer, cursor, 0)){
+        return 0;
+    }else 
+        return -1;
+};

@@ -12,8 +12,11 @@
 #include <netdb.h>
 #include <map>
 #include <ClientElement.hpp>
+#include <openssl/rand.h>
 #include "Message.hpp"
 #include "OpCodes.h"
+#include "auth.cpp"
+#include "../client/signature_utilities.cpp"
 
 #define PORT "9034"   // port we're listening on
 // two maps that point to the same clientelement objects
@@ -30,9 +33,10 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void HandleMessage(Message* message, int socket){
+int HandleMessage(X509* server_cert, Message* message, int socket){
     int32_t data_buf_len = 0;
     bool error = false;
+    ClientElement* user;
     switch(message->GetOpCode()) {
         case first_auth_msg_code:
             // very first message of an authentication procedure
@@ -49,26 +53,79 @@ void HandleMessage(Message* message, int socket){
                 auto tmpIterator = connectedClientsBySocket.find(socket);
                 // add a mapping (username, clientelement) for this user
                 if(tmpIterator != connectedClientsBySocket.end()){
-                    connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, tmpIterator->second));
-                    tmpIterator->second->SetUsername(username);
-                    tmpIterator->second->SetNonceReceived(nonce_user);
+                    user = tmpIterator->second;
+                    connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, user));
+                    user->SetUsername(username);
+                    user->SetNonceReceived(nonce_user);
                 }
                 else{
                     perror("first auth message: no client object for this socket id, how did we get here?");
-                    error = true;
+                    return 1;
                 }
             } else{
                 perror("first auth message: getdata");
-                error = true;
+                return 1;
             }
-
-            // must send the 2nd auth message to the client
+            // generate DH keys for this user
+            if(!(user != NULL || GenerateKeysForUser(user))){
+                perror("DH Key generation failed");
+                return 1;
+            }
+            // build reply for the client
             // opCode = second_auth_msg_code
             // data contains, in order:
             // [int32_t] server nonce; [long] size of PEM; [size of PEM] PEM DH-S; 
             // [int32_t] size signature(pem+nonce); [size of signature] signature(pem+ nonce);
             // [tot size so far - size] server-cert
+            //build data:
+            int32_t ns;
+	        RAND_bytes((unsigned char*)&ns, sizeof(int32_t));
+            long pem_size = user->GetToSendPubDHKeySize();
+            // signature of nonce and pem
+            unsigned char* pem_buffer;
+			unsigned char* pt = new unsigned char[pem_size+sizeof(int32_t)];
+            int32_t na = user->GetNonceReceived();
+			memcpy(pt, pem_buffer, pem_size);
+			memcpy(pt+pem_size, &na, sizeof(int32_t));
+            unsigned char* cl_sign;
+			unsigned int cl_sign_size;
+            EVP_PKEY* server_public_key = X509_get_pubkey(server_cert);
+            signature(server_public_key, pt,&cl_sign, pem_size+sizeof(int32_t), &cl_sign_size);
+            // load server cert
+            BIO* serv_cert_BIO = BIO_new(BIO_s_mem());
+            unsigned char* serv_cert_buffer;
+            PEM_write_bio_X509(serv_cert_BIO, server_cert);
+            long cert_size = BIO_get_mem_data(serv_cert_BIO, &serv_cert_buffer);
+            // put it all together
+            unsigned char* buffer = new unsigned char[(2*sizeof(int32_t))+sizeof(long)+pem_size+cl_sign_size+cert_size];
+            int cursor = 0;
+            memcpy(buffer,&ns,sizeof(int32_t));
+            cursor += sizeof(int32_t);
+            memcpy(buffer+cursor,&pem_size,sizeof(long));
+            cursor += sizeof(long);
+            memcpy(buffer+cursor,pem_buffer,pem_size);
+            cursor += pem_size;
+            memcpy(&buffer+cursor,&cl_sign_size,sizeof(int32_t));
+            cursor += sizeof(int32_t);
+            memcpy(&buffer+cursor,cl_sign,cl_sign_size);
+            cursor += cl_sign_size;
+            memcpy(&buffer+cursor, serv_cert_buffer, cert_size);
+            cursor += cert_size;
 
+            // and finally build the reply message and send it
+            Message* reply = new Message();
+            reply->SetOpCode(second_auth_msg_code);
+            reply->setData(buffer, cursor);
+            reply->SendUnencryptedMessage(socket);
+            
+            // free all the buffers
+            free(pem_buffer);
+            free(pt);
+            free(cl_sign);
+            free(buffer);
+            free(serv_cert_buffer);
+            BIO_free(serv_cert_BIO);
+            delete(reply);
             break;
             
         case final_auth_msg_code:
@@ -129,7 +186,14 @@ int main(void)
     FD_ZERO(&master);    // clear the master and temp sets
     FD_ZERO(&read_fds);
 
-    //TODO: Store
+    // load server cert
+	FILE *fp_SV_cert = fopen("../certificates/serv_cert.pem", "r"); 
+	if(!fp_SV_cert){
+		perror("SV certificate pem file");
+		exit(-1);
+	}
+	X509* SV_cert = PEM_read_X509(fp_SV_cert, NULL, NULL, NULL);
+	fclose(fp_SV_cert);
 
 	// get us a socket and bind it
 	memset(&hints, 0, sizeof hints);
@@ -271,7 +335,7 @@ int main(void)
                         if(!encrypted_message){
                             Message* message = new Message();
                             message->Unwrap_unencrypted_message(msg_buf, msg_len_buf);
-                            HandleMessage(message, i);
+                            HandleMessage(SV_cert, message, i);
                             delete(message);                            
                         } else {
                             Message* message = new Message();
@@ -279,7 +343,7 @@ int main(void)
                             if(tmpIterator != connectedClientsBySocket.end())
                             {
                                 message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey());
-                                HandleMessage(message, i);
+                                HandleMessage(SV_cert, message, i);
                             }
                             delete(message);  
                         }

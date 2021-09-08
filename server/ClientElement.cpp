@@ -1,5 +1,8 @@
 #include "ClientElement.hpp"  
 #include <string>
+#include <openssl/x509_vfy.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 
 	std::string user_id;
     int32_t socket;
@@ -76,4 +79,54 @@ int ClientElement::GetSocketID(){
 
 void ClientElement::SetSocketID(int socket){
     this->socket = socket;
+}
+
+EVP_PKEY* ClientElement::GetPrivateDHKey(){
+    return this->pri_dh_key;
+}
+
+int ClientElement::SetPrivateDHKey(EVP_PKEY* key){
+    if(this->pri_dh_key == NULL){
+        if(key != NULL){
+            this->pri_dh_key = key;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+BIO* ClientElement::GetOurPublicDHKey(){
+    return this->pub_dh_key_to_send;
+}
+
+int ClientElement::SetOurPublicDHKey(BIO* key){
+    if(this->pub_dh_key_to_send == NULL){
+        if(key != NULL){
+            this->tosend_dh_key_size = BIO_get_mem_data(key,this->pub_dh_key_to_send);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+BIO* ClientElement::GetPeerPublicDHKey(){
+    return this->pub_dh_key_received;
+}
+
+int ClientElement::SetPeerPublicDHKey(BIO* key, long keysize){
+    if(this->pub_dh_key_received == NULL){
+        if(key != NULL){
+            this->received_dh_key_size = BIO_get_mem_data(key,this->pub_dh_key_received);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+long ClientElement::GetToSendPubDHKeySize(){
+    return this->tosend_dh_key_size;
+}
+
+long ClientElement::GetReceivedPubDHKeySize(){
+    return this->received_dh_key_size;
 }
