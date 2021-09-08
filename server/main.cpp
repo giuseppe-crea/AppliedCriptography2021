@@ -33,7 +33,7 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int HandleMessage(X509* server_cert, Message* message, int socket){
+int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* message, int socket){
     int32_t data_buf_len = 0;
     bool error = false;
     ClientElement* user;
@@ -77,11 +77,11 @@ int HandleMessage(X509* server_cert, Message* message, int socket){
             // [int32_t] server nonce; [long] size of PEM; [size of PEM] PEM DH-S; 
             // [int32_t] size signature(pem+nonce); [size of signature] signature(pem+ nonce);
             // [tot size so far - size] server-cert
-            //build data:
+            // gen new nonce
             int32_t ns;
 	        RAND_bytes((unsigned char*)&ns, sizeof(int32_t));
             long pem_size = user->GetToSendPubDHKeySize();
-            // signature of nonce and pem
+            // signature of received nonce and pem
             unsigned char* pem_buffer;
 			unsigned char* pt = new unsigned char[pem_size+sizeof(int32_t)];
             int32_t na = user->GetNonceReceived();
@@ -89,8 +89,7 @@ int HandleMessage(X509* server_cert, Message* message, int socket){
 			memcpy(pt+pem_size, &na, sizeof(int32_t));
             unsigned char* cl_sign;
 			unsigned int cl_sign_size;
-            EVP_PKEY* server_public_key = X509_get_pubkey(server_cert);
-            signature(server_public_key, pt,&cl_sign, pem_size+sizeof(int32_t), &cl_sign_size);
+            signature(server_private_key, pt, &cl_sign, pem_size+sizeof(int32_t), &cl_sign_size);
             // load server cert
             BIO* serv_cert_BIO = BIO_new(BIO_s_mem());
             unsigned char* serv_cert_buffer;
@@ -186,6 +185,8 @@ int main(void)
     FD_ZERO(&master);    // clear the master and temp sets
     FD_ZERO(&read_fds);
 
+    EVP_PKEY* sv_pr_key;
+
     // load server cert
 	FILE *fp_SV_cert = fopen("../certificates/serv_cert.pem", "r"); 
 	if(!fp_SV_cert){
@@ -194,6 +195,10 @@ int main(void)
 	}
 	X509* SV_cert = PEM_read_X509(fp_SV_cert, NULL, NULL, NULL);
 	fclose(fp_SV_cert);
+
+    // load private key
+    FILE* pem_sv_prvkey = fopen("../certificates/serv_prvkey.pem","r");
+	sv_pr_key = PEM_read_PrivateKey(pem_sv_prvkey,NULL,NULL,NULL);
 
 	// get us a socket and bind it
 	memset(&hints, 0, sizeof hints);
@@ -335,7 +340,7 @@ int main(void)
                         if(!encrypted_message){
                             Message* message = new Message();
                             message->Unwrap_unencrypted_message(msg_buf, msg_len_buf);
-                            HandleMessage(SV_cert, message, i);
+                            HandleMessage(sv_pr_key, SV_cert, message, i);
                             delete(message);                            
                         } else {
                             Message* message = new Message();
@@ -343,7 +348,7 @@ int main(void)
                             if(tmpIterator != connectedClientsBySocket.end())
                             {
                                 message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey());
-                                HandleMessage(SV_cert, message, i);
+                                HandleMessage(sv_pr_key, SV_cert, message, i);
                             }
                             delete(message);  
                         }
