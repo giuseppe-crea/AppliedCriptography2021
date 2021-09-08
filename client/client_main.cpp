@@ -76,7 +76,7 @@ int main(){
 
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
-	FILE *fp_CA_cert = fopen("fp_CA_cert.pem", "r"); 
+	FILE *fp_CA_cert = fopen("keys/ca_cert.pem", "r"); 
 	if(!fp_CA_cert){
 		perror("CA certificate pem file");
 		exit(-1);
@@ -150,7 +150,7 @@ int main(){
 			close(sockfd);
 			exit(-2);
 		}
-		else if (first_word.compare(end_chat_cmd)){
+		else if (sharedVariables->chatting & first_word.compare(end_chat_cmd)){
 			send_to_sv(end_chat_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
 			struct_mutex.lock();
 			sharedVariables->chatting = false;

@@ -30,9 +30,6 @@ const int peer_message_received_code = 351;
 // client commands
 
 const string chat_request_cmd = ":chat";
-const string accepting_request_cmd = ":y";
-const string dening_request_cmd = ":n";
-
 const string end_chat_cmd = ":close";
 const string logout_cmd = ":logout";
 const string list_request_cmd = ":list";
