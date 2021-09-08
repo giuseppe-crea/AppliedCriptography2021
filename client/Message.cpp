@@ -26,10 +26,10 @@ Message::~Message()
 
 int32_t Message::GenIV(){
     if(this->iv != NULL)
-        handleErrors();
+        perror("IV already set");
     this->iv = (unsigned char*)malloc(12*sizeof(unsigned char));
     if(this->iv == NULL)
-        handleErrors();
+        perror("IV not initialized");
     if(!RAND_bytes(this->iv, 12))
         return -1;
     return 0;
@@ -143,7 +143,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     unsigned char* pt_buffer;
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0)
-        handleErrors();
+        perror("Negative data length");
     
     cursor = 0;
     memcpy(&opCode, pt_buffer, sizeof(int32_t));
@@ -153,7 +153,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
     if(!this->setData(pt_buffer+cursor, dataLen-cursor))
-        handleErrors();
+        perror("Error in setting data");
     
     return 0;
 }

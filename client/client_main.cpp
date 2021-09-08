@@ -5,14 +5,46 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
+// utility to handle the extraction of pub and prv key of identifying user
+bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY** cl_pr_key){
+	string prefix = "keys/";
+    
+    string prvkey_suffix = "_prvkey.pem";
+	string pubkey_suffix = "_pubkey.pem";
+	int prvkey_buffer_bytes = prefix.size()+prvkey_suffix.size()+username.size()+1;
+	char* prvkey_buffer = new char[prvkey_buffer_bytes];
+    int cursor = 0;
+    memcpy(prvkey_buffer,prefix.c_str(),prefix.size());
+    cursor += prefix.size();
+	memcpy(prvkey_buffer+cursor,username.c_str(),username.size());
+    cursor += username.size();
+	memcpy(prvkey_buffer + cursor,prvkey_suffix.c_str(),prvkey_suffix.size()+1);
+    cursor = 0;
+	int pubkey_buffer_bytes = pubkey_suffix.size()+username.size()+1;
+	char* pubkey_buffer = new char[pubkey_buffer_bytes];
+    memcpy(pubkey_buffer,prefix.c_str(),prefix.size());
+    cursor += prefix.size();
+	memcpy(pubkey_buffer + cursor,username.c_str(),username.size());
+    cursor += username.size();
+	memcpy(pubkey_buffer + cursor,pubkey_suffix.c_str(),pubkey_suffix.size()+1);
 
-// TODO: function handling errors 
+	FILE* pem_cl_prvkey = fopen(prvkey_buffer,"r");
+	FILE* pem_cl_pubkey = fopen(pubkey_buffer,"r");
+	if(pem_cl_prvkey==NULL || pem_cl_pubkey == NULL){
+		perror("Unavailable keys.");
+        return false;
+    }
+	free(prvkey_buffer);
+	free(pubkey_buffer);
 
-void error(int code);
+	*cl_pub_key = PEM_read_PUBKEY(pem_cl_pubkey,NULL,NULL,NULL);
+	*cl_pr_key = PEM_read_PrivateKey(pem_cl_prvkey,NULL,NULL,(void*)password.c_str());
 
-// TODO: Implement
-bool get_keys(string username, string password, EVP_PKEY* cl_pub_key, EVP_PKEY* cl_pr_key){
+    if(!*cl_pr_key || !*cl_pub_key)
+        return false;
+
 	return true;
 }
 
@@ -33,6 +65,8 @@ int main(){
 
 	static mutex struct_mutex;
 
+
+	// identification of user
 	string cl_id;
 	string password;
 	cout << "Who are you?" << endl;
@@ -40,17 +74,22 @@ int main(){
 	cout << "Please insert password" << endl;
 	cin >> password;
 
-	//TODO: understand where to store keys
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
 	FILE *fp_CA_cert = fopen("fp_CA_cert.pem", "r"); 
+	if(!fp_CA_cert){
+		perror("CA certificate pem file");
+		exit(-1);
+	}
 	X509* CA_cert = PEM_read_X509(fp_CA_cert, NULL, NULL, NULL);
 	X509_STORE_add_cert(store, CA_cert);
 	fclose(fp_CA_cert);
 
 
-	if(!get_keys(cl_id,password,sharedVariables->cl_pubkey,sharedVariables->cl_prvkey))
+	if(!get_keys(cl_id,password,&sharedVariables->cl_pubkey,&sharedVariables->cl_prvkey))
 		perror("INVALID_USER");
+
+	cout << "User identified" << endl;
 
 	// connect to server
 
@@ -96,7 +135,7 @@ int main(){
 			send_to_sv(list_request_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
 		else if (!sharedVariables->chatting & first_word.compare(chat_request_cmd)){
 			if(input_buffer.size() < 6)
-				error(chat_request_code);
+				perror("You have to insert an id for a user.");
 			else{
 				string recipient_id;
 				stringstream ss;
