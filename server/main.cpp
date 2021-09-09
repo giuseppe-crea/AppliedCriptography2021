@@ -62,8 +62,7 @@ void force_quit_socket(int i){
             std::string partnerName = tmpIterator->second->GetPartnerName();
             Message* message = new Message();
             message->SetOpCode(closed_chat_code);
-            auto tmpPartnerIterator = connectedClientsByUsername.find(partnerName);
-            ClientElement* chatPartner = tmpPartnerIterator->second;
+            ClientElement* chatPartner = get_user_by_id(partnerName);
             message->SetCounter(chatPartner->GetCounterTo());
             message->setData(NULL, 0);
             message->Encode_message(chatPartner->GetSessionKey());
@@ -177,7 +176,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             free(serv_cert_buffer);
             BIO_free(serv_cert_BIO);
             delete(reply);
-            break;
+        break;
             
         case final_auth_msg_code:
             // data contains, in order:
@@ -412,16 +411,28 @@ int main(void)
                         } else {
                             Message* message = new Message();
                             auto tmpIterator = connectedClientsBySocket.find(i);
-                            if(tmpIterator != connectedClientsBySocket.end())
-                            {
-                                message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey());
-                                if(tmpIterator->second->GetCounterFrom() != message->GetCounter()){
-                                    string error_message = "User "+tmpIterator->second->GetUsername()+" counter's is out of synch, disconnecting them.";
+                            if(tmpIterator != connectedClientsBySocket.end()){
+                                if(!message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey())){
+                                    string error_message = "Message from user "+tmpIterator->second->GetUsername()+" couldn't be decrypted, disconnecting them.";
                                     perror(error_message.c_str());
                                     force_quit_socket(i);
                                     FD_CLR(i, &master); // remove from master set
+                                }else{
+                                    HandleMessage(sv_pr_key, SV_cert, message, i);
+                                    if(tmpIterator->second->GetCounterFrom() != message->GetCounter()){
+                                        string error_message = "User "+tmpIterator->second->GetUsername()+" counter's is out of synch, disconnecting them.";
+                                        perror(error_message.c_str());
+                                        force_quit_socket(i);
+                                        FD_CLR(i, &master); // remove from master set
+                                    }else{
+                                        tmpIterator->second->IncreaseCounterFrom();
+                                        HandleMessage(sv_pr_key, SV_cert, message, i);
+                                    }
                                 }
-                                HandleMessage(sv_pr_key, SV_cert, message, i);
+                            } else{
+                                perror("No client connected on socket! Something failed with the handshake!");
+                                force_quit_socket(i);
+                                FD_CLR(i, &master); // remove from master set
                             }
                             delete(message);  
                         }

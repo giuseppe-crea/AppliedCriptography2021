@@ -10,7 +10,9 @@ class ClientElement
 		std::string chat_partner_id;
 		unsigned char* sessionKey;
 		int32_t socket;
+		// Counter from is MANUALLY incremented before each handlemessage of ENCRYPTED messages only
 		int32_t counter_from = 0;
+		// Counter from is AUTOMATICALLY incremented inside the SendMessage function of a Message Object
 		int32_t counter_to = 0;
 		int32_t nonce_received = 0;
 		int32_t nonce_sent = 0;

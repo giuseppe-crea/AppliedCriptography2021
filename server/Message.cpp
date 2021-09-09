@@ -129,6 +129,9 @@ int32_t Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_
     this->setData(data_buffer, data_size_buffer-cursor);
 }
 
+// fills out the following fields:
+// opCode; Counter; data; data_dim
+// data will be decrypted plaintext
 int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key){
     int32_t cursor = 0;
     // init a buffer for the data
@@ -148,9 +151,10 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     // decryption
     unsigned char* pt_buffer;
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, NULL, tag_buffer, key, iv_buffer, 12, pt_buffer);
-    if(dataLen <= 0)
+    if(dataLen <= 0){
         handleErrors();
-    
+        return 1;
+    }
     cursor = 0;
     memcpy(&opCode, pt_buffer, sizeof(int32_t));
     cursor += sizeof(int32_t);
@@ -158,9 +162,10 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     memcpy(&counter, pt_buffer+cursor, sizeof(int32_t));
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
-    if(!this->setData(pt_buffer+cursor, dataLen-cursor))
+    if(!this->setData(pt_buffer+cursor, dataLen-cursor)){
         handleErrors();
-    
+        return 1;
+    }
     return 0;
 }
 
