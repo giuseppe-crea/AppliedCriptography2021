@@ -244,6 +244,9 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 // the SetSessionKey makes a copy of the peer session key, it is safe to free the buffers
                 free(peer_session_key);
                 free(secret);
+                EVP_MD_CTX_free(hash_ctx);
+                EVP_PKEY_CTX_free(kd_ctx);
+                EVP_PKEY_free(peer_dh_pubkey);
             }
             free(data_buffer);
             free(buffer);
