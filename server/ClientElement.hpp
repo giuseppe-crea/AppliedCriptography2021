@@ -8,18 +8,19 @@ class ClientElement
 
 		std::string user_id;
 		std::string chat_partner_id;
-		unsigned char sessionKey[32];
+		unsigned char* sessionKey;
 		int32_t socket;
-		int32_t session_key_placeholder;
-		int32_t public_key_placeholder;
 		int32_t counter_from = 0;
 		int32_t counter_to = 0;
 		int32_t nonce_received = 0;
+		int32_t nonce_sent = 0;
+		int session_key_len;
 		long tosend_dh_key_size;
 		long received_dh_key_size;
 		BIO* pub_dh_key_to_send;
 		BIO* pub_dh_key_received;
 		EVP_PKEY* pri_dh_key;
+		EVP_PKEY* public_key;
 		bool isBusy = false;
 
 	public:
@@ -27,7 +28,6 @@ class ClientElement
 		ClientElement();
 		void IncreaseCounterFrom();
 		void IncreaseCounterTo();
-		void SetSessionKey(unsigned char* key);
 		unsigned char* GetSessionKey();
 		int SetUsername(std::string username);
 		std::string GetUsername();
@@ -35,6 +35,8 @@ class ClientElement
 		std::string GetPartnerName();
 		int SetNonceReceived(int32_t nonce);
 		int32_t GetNonceReceived();
+		int SetNonceSent(int32_t nonce);
+		int32_t GetNonceSent();
 		int StartChatSession(std::string PartnerID);
 		int EndChatSession();
 		int32_t GetCounterTo();
@@ -51,6 +53,9 @@ class ClientElement
 		int SetPeerPublicDHKey(BIO* key, long keysize);
 		long GetToSendPubDHKeySize();
 		long GetReceivedPubDHKeySize();
+		EVP_PKEY* GetPublicKey();
+		int SetSessionKey(unsigned char* key, int key_len);
+		unsigned char* GetSessionKey(int* len);
 		~ClientElement();
 
 };

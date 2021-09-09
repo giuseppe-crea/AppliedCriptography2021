@@ -3,11 +3,10 @@
 #include <openssl/x509_vfy.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include "getKeys.cpp"
 
 	std::string user_id;
     int32_t socket;
-    int32_t session_key_placeholder;
-    int32_t public_key_placeholder;
     int32_t counter_from = 0;
     int32_t  counter_to = 0;
     bool isBusy = false;
@@ -25,6 +24,11 @@ ClientElement::~ClientElement()
 
 int ClientElement::SetUsername(std::string username){
     this->user_id = username;
+    if(!get_keys(username, &this->public_key)){
+        string error_message = "Can't load public key for user: "+username;
+        perror(error_message.c_str());
+        return 1;
+    }
     return 0;
 }
 
@@ -46,6 +50,14 @@ int ClientElement::SetNonceReceived(int32_t nonce){
 
 int32_t ClientElement::GetNonceReceived(){
     return nonce_received;
+}
+
+int ClientElement::SetNonceReceived(int32_t nonce){
+    this->nonce_sent = nonce;
+}
+
+int32_t ClientElement::GetNonceReceived(){
+    return nonce_sent;
 }
 
 void ClientElement::IncreaseCounterFrom()
@@ -129,4 +141,22 @@ long ClientElement::GetToSendPubDHKeySize(){
 
 long ClientElement::GetReceivedPubDHKeySize(){
     return this->received_dh_key_size;
+}
+
+EVP_PKEY* ClientElement::GetPublicKey(){
+    
+}
+
+int ClientElement::SetSessionKey(unsigned char* key, int key_len){
+    if(key != NULL){
+        this->sessionKey = new unsigned char[key_len];
+        memcpy(this->sessionKey, key, key_len);
+        this->session_key_len = key_len;
+    }
+}
+
+unsigned char* ClientElement::GetSessionKey(int* len){
+    if(len != NULL)
+        memcpy(len, &this->session_key_len, sizeof(int));
+    return this->sessionKey;
 }

@@ -33,6 +33,22 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+ClientElement* get_user_by_id(string id){
+    auto tmpIterator = connectedClientsByUsername.find(id);
+    if(tmpIterator != connectedClientsByUsername.end()){
+        return tmpIterator ->second;
+    }
+    else return NULL;
+}
+
+ClientElement* get_user_by_socket(int socket){
+    auto tmpIterator = connectedClientsBySocket.find(socket);
+    if(tmpIterator != connectedClientsBySocket.end()){
+        return tmpIterator ->second;
+    }
+    else return NULL;
+}
+
 int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* message, int socket){
     int32_t data_buf_len = 0;
     bool error = false;
@@ -55,6 +71,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 if(tmpIterator != connectedClientsBySocket.end()){
                     user = tmpIterator->second;
                     connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, user));
+                    // WARNING: This operation also loads the related public key
                     user->SetUsername(username);
                     user->SetNonceReceived(nonce_user);
                 }
@@ -80,6 +97,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             // gen new nonce
             int32_t ns;
 	        RAND_bytes((unsigned char*)&ns, sizeof(int32_t));
+            user->SetNonceSent(ns);
             long pem_size = user->GetToSendPubDHKeySize();
             // signature of received nonce and pem
             unsigned char* pem_buffer;
@@ -132,30 +150,75 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             // [long] size of pem; [size of pem] PEM; [uint] signature size; [signature size] signature
             unsigned char* data_buffer = NULL;
             int pem_dim;
+            ClientElement* user = get_user_by_socket(socket);
             
             if(!message->getData(data_buffer, &data_buf_len)){
+                // read the message and place its content in various buffers
                 int32_t cursor = 0;
                 long pem_dim;
                 unsigned int cl_sign_size;
                 memcpy(&pem_dim, data_buffer, sizeof(long));
                 cursor += sizeof(long);
-                char* buffer = new char[pem_dim];
-                memcpy(&buffer, data_buffer+ cursor, pem_dim);
+                unsigned char* buffer = new unsigned char[pem_dim];
+                memcpy(&buffer, data_buffer+cursor, pem_dim);
                 cursor += pem_dim;
                 memcpy(&cl_sign_size, data_buffer+ cursor, sizeof(unsigned int));
                 cursor += sizeof(unsigned int);
-                char* cl_sign = new char[cl_sign_size];
+                unsigned char* cl_sign = new unsigned char[cl_sign_size];
                 memcpy(&cl_sign, data_buffer+ cursor, cl_sign_size);
 
+                // verify signature
+                if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceReceived(), pem_dim, cl_sign, cl_sign_size)){
+                    string error_message = "Signature verification for client "+user->GetUsername()+" failed.";
+                    perror(error_message.c_str());
+                    return 1;
+                }
+                
                 // run key derivation on this data
-                // save session key to clientelement object
+                // session key derivation
+                EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(user->GetPrivateDHKey(), NULL);
+                EVP_PKEY_derive_init(kd_ctx);
+                EVP_PKEY* peer_dh_pubkey = NULL;
+	            peer_dh_pubkey = PEM_read_bio_PUBKEY(user->GetPeerPublicDHKey(),NULL,NULL,NULL);
+                int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
 
-                // Do we need to reply anything?
+                if(ret == 0){
+                    string error_message = "Key derivation for client "+user->GetUsername()+" failed.";
+                    perror(error_message.c_str());
+                    return 1;
+                }
+
+                // instantiate shared secret
+                unsigned char* secret;
+
+                size_t secret_length;
+                EVP_PKEY_derive(kd_ctx,NULL,&secret_length);
+
+                // deriving
+                secret = (unsigned char*)malloc(secret_length);
+                EVP_PKEY_derive(kd_ctx,secret,&secret_length);
+
+                // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
+                EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
+
+                unsigned char* peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
+                unsigned int peer_session_key_length;
+                EVP_DigestInit(hash_ctx,EVP_sha256());
+                EVP_DigestUpdate(hash_ctx,secret,secret_length);
+                EVP_DigestFinal(hash_ctx, peer_session_key, &peer_session_key_length);
+                // save session key to clientelement object
+                user->SetSessionKey(peer_session_key, peer_session_key_length);
+                // the SetSessionKey makes a copy of the peer session key, it is safe to free the buffers
+                free(peer_session_key);
+                free(secret);
             }
+            free(data_buffer);
+            free(buffer);
+            free(cl_sign);
         break;
 
         case chat_request_code:
-
+    	break;
 
     }
 }  
