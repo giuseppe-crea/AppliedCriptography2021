@@ -101,6 +101,11 @@ void force_quit_socket(int i, int opCode){
     FD_CLR(i, &master);
 }
 
+// despite the name, this function allocates a NEW Message object
+// it then copies data and opcode from the received message
+// encodes and encrypts them with the user's partner session key
+// and sends the message to the partner
+// RETURNS true if there are any errors, false otherwise
 bool message_passthrough(ClientElement* user, Message* message){
     if(user == NULL){
         return true;
@@ -450,6 +455,8 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
         }
     }
     free(data_buffer);
+    if(error)
+        return 1;
 }  
 
 int main(void)
