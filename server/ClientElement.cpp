@@ -144,7 +144,7 @@ long ClientElement::GetReceivedPubDHKeySize(){
 }
 
 EVP_PKEY* ClientElement::GetPublicKey(){
-    
+    return this->public_key;
 }
 
 int ClientElement::SetSessionKey(unsigned char* key, int key_len){

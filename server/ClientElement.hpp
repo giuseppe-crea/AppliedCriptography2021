@@ -31,6 +31,7 @@ class ClientElement
 		void IncreaseCounterFrom();
 		void IncreaseCounterTo();
 		unsigned char* GetSessionKey();
+		// SetUsername also loads the appropriate public key from file
 		int SetUsername(std::string username);
 		std::string GetUsername();
 		int SetPartnerName(std::string username);
