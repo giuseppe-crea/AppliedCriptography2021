@@ -18,4 +18,3 @@ const int32_t list_request_code = 374;
 const int32_t list_code = 375;
 
 const int32_t peer_message_code = 350;
-const int32_t peer_message_received_code = 351;

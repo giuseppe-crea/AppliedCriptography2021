@@ -25,7 +25,6 @@ const int list_request_code = 374;
 const int list_code = 375;
 
 const int peer_message_code = 350;
-const int peer_message_received_code = 351;
 
 // client commands
 
