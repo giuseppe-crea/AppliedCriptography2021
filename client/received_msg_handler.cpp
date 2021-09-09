@@ -87,7 +87,7 @@ void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variabl
                 list(data);
                 break;
 
-                case peer_message_received_code:
+                case peer_message_code:
                 peer_message_received(data, data_dim, &sharedVariables->counterBA, sharedVariables->peer_session_key,struct_mutex);
                 break;
             }

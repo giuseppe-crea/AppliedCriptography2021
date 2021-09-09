@@ -23,6 +23,8 @@
 std::map<int, ClientElement*> connectedClientsBySocket;
 std::map<std::string, ClientElement*> connectedClientsByUsername;
 
+fd_set master;    // master file descriptor list
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -49,7 +51,29 @@ ClientElement* get_user_by_socket(int socket){
     else return NULL;
 }
 
-void force_quit_socket(int i){
+// functions specifically for sending errors between peers
+// it cannot transfer data
+int peer_error(ClientElement* target, int opCode){
+    // notify partner the chat has been aborted
+    Message* reply = new Message();
+    reply->SetCounter(target->GetCounterTo());
+    reply->SetOpCode(opCode);
+    reply->setData(NULL, 0);
+    reply->Encode_message(target->GetSessionKey());
+    reply->SendMessage(target->GetSocketID(), target);
+    free(reply);
+    // zero out the partners
+    target->SetPartnerName("");
+    get_user_by_id(target->GetPartnerName())->SetPartnerName("");
+    // print error
+    string error_message = "Had a ["+to_string(opCode)+"] error for client " + target->GetUsername();
+    perror(error_message.c_str());
+}
+
+// @param
+// i:       the socket on which the erroring client is connected
+// opCode:  the opCode we will send to the erroring client's potential partner
+void force_quit_socket(int i, int opCode){
     close(i); // bye!
     // removing from connectedClients and deleting the client object
     auto tmpIterator = connectedClientsBySocket.find(i);
@@ -60,15 +84,9 @@ void force_quit_socket(int i){
             // this user has a username, it might have a partner
             // alerting a potential chat partner that this user disconnected
             std::string partnerName = tmpIterator->second->GetPartnerName();
-            Message* message = new Message();
-            message->SetOpCode(closed_chat_code);
-            ClientElement* chatPartner = get_user_by_id(partnerName);
-            message->SetCounter(chatPartner->GetCounterTo());
-            message->setData(NULL, 0);
-            message->Encode_message(chatPartner->GetSessionKey());
-            message->SendMessage(chatPartner->GetSocketID(), chatPartner);
-            // after alerting that user, we clear its chat partner field
-            chatPartner->SetPartnerName("");
+            if(opCode != 0 && partnerName != ""){
+                peer_error(get_user_by_id(partnerName), opCode);
+            }
             // this user has a username, 
             // we can find the corresponding user object
             auto usernameIterator = connectedClientsByUsername.find(tmpUsername);
@@ -80,45 +98,74 @@ void force_quit_socket(int i){
         delete(tmpIterator->second);
         connectedClientsBySocket.erase(tmpIterator);
     }
+    FD_CLR(i, &master);
 }
 
-int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* message, int socket){
+bool message_passthrough(ClientElement* user, Message* message){
+    if(user == NULL){
+        return true;
+    }
+    ClientElement *target = get_user_by_id(user->GetPartnerName());
+    if(target == NULL){
+        return true;
+    }
+    Message* reply = new Message();
+    bool error = false;
+    int ret = 0;
+    unsigned char* data_buffer;
+    int data_buf_len;
+    ret += reply->SetCounter(target->GetCounterTo());
+    ret += reply->SetOpCode(message->GetOpCode());
+    ret += message->getData(&data_buffer, &data_buf_len);
+    ret += reply->setData(data_buffer, data_buf_len);
+    ret += reply->Encode_message(target->GetSessionKey());
+    if(ret == 0){
+        ret += reply->SendMessage(target->GetSocketID(), target);
+        if(ret != 0){
+            force_quit_socket(target->GetSocketID(), 0);
+            error = true;
+        }
+    }else
+        error = true;
+    free(reply);
+    free(data_buffer);
+    return error;
+}
+
+int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* message, int socket, int32_t* error_code){
     int32_t data_buf_len = 0;
     bool error = false;
-    ClientElement* user;
+    ClientElement* user = get_user_by_socket(socket);
+    unsigned char* data_buffer = NULL;
+    if(user == NULL){
+        perror("Woah nelly!");
+        return 1;
+    }
     switch(message->GetOpCode()) {
-        case first_auth_msg_code:
+        case first_auth_msg_code:{
             // very first message of an authentication procedure
             // data contains, in order:
             // nonce, username
             int32_t nonce_user = -1;
-            unsigned char* data_buffer = NULL;
-            if(!message->getData(data_buffer, &data_buf_len)){
+            if(!message->getData(&data_buffer, &data_buf_len)){
                 // copy sizeof(int32_t) bytes from buffer to nonce
                 memcpy(&nonce_user, data_buffer, sizeof(int32_t));
                 // copy data_buf_len - sizeof(int32_t) bytes into username
                 std::string username(reinterpret_cast<char*>(data_buffer+sizeof(int32_t)), data_buf_len - sizeof(int32_t));
-                // find the relevant client object by socket id
-                auto tmpIterator = connectedClientsBySocket.find(socket);
                 // add a mapping (username, clientelement) for this user
-                if(tmpIterator != connectedClientsBySocket.end()){
-                    user = tmpIterator->second;
-                    connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, user));
-                    // WARNING: This operation also loads the related public key
-                    user->SetUsername(username);
-                    user->SetNonceReceived(nonce_user);
-                }
-                else{
-                    perror("first auth message: no client object for this socket id, how did we get here?");
-                    return 1;
-                }
-            } else{
+                connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, user));
+                // WARNING: This operation also loads the related public key
+                user->SetUsername(username);
+                user->SetNonceReceived(nonce_user);
+            }else{
                 perror("first auth message: getdata");
+                free(data_buffer);
                 return 1;
             }
             // generate DH keys for this user
             if(!(user != NULL || GenerateKeysForUser(user))){
                 perror("DH Key generation failed");
+                free(data_buffer);
                 return 1;
             }
             // build reply for the client
@@ -177,15 +224,12 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             BIO_free(serv_cert_BIO);
             delete(reply);
         break;
-            
-        case final_auth_msg_code:
+        } 
+        case final_auth_msg_code:{
             // data contains, in order:
             // [long] size of pem; [size of pem] PEM; [uint] signature size; [signature size] signature
-            unsigned char* data_buffer = NULL;
             int pem_dim;
-            ClientElement* user = get_user_by_socket(socket);
-            
-            if(!message->getData(data_buffer, &data_buf_len)){
+            if(!message->getData(&data_buffer, &data_buf_len)){
                 // read the message and place its content in various buffers
                 int32_t cursor = 0;
                 long pem_dim;
@@ -204,64 +248,213 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceReceived(), pem_dim, cl_sign, cl_sign_size)){
                     string error_message = "Signature verification for client "+user->GetUsername()+" failed.";
                     perror(error_message.c_str());
-                    return 1;
+                    error = true;
                 }
-                
-                // run key derivation on this data
-                // session key derivation
-                EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(user->GetPrivateDHKey(), NULL);
-                EVP_PKEY_derive_init(kd_ctx);
-                EVP_PKEY* peer_dh_pubkey = NULL;
-	            peer_dh_pubkey = PEM_read_bio_PUBKEY(user->GetPeerPublicDHKey(),NULL,NULL,NULL);
-                int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
+                if(!error){
+                    // run key derivation on this data
+                    // session key derivation
+                    EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(user->GetPrivateDHKey(), NULL);
+                    EVP_PKEY_derive_init(kd_ctx);
+                    EVP_PKEY* peer_dh_pubkey = NULL;
+                    peer_dh_pubkey = PEM_read_bio_PUBKEY(user->GetPeerPublicDHKey(),NULL,NULL,NULL);
+                    int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
 
-                if(ret == 0){
-                    string error_message = "Key derivation for client "+user->GetUsername()+" failed.";
-                    perror(error_message.c_str());
-                    return 1;
+                    if(ret == 0){
+                        string error_message = "Key derivation for client "+user->GetUsername()+" failed.";
+                        perror(error_message.c_str());
+                        error = true;
+                    }
+                    if(!error){
+                        // instantiate shared secret
+                        unsigned char* secret;
+
+                        size_t secret_length;
+                        EVP_PKEY_derive(kd_ctx,NULL,&secret_length);
+
+                        // deriving
+                        secret = (unsigned char*)malloc(secret_length);
+                        EVP_PKEY_derive(kd_ctx,secret,&secret_length);
+
+                        // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
+                        EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
+
+                        unsigned char* peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
+                        unsigned int peer_session_key_length;
+                        EVP_DigestInit(hash_ctx,EVP_sha256());
+                        EVP_DigestUpdate(hash_ctx,secret,secret_length);
+                        EVP_DigestFinal(hash_ctx, peer_session_key, &peer_session_key_length);
+                        // save session key to clientelement object
+                        user->SetSessionKey(peer_session_key, peer_session_key_length);
+                        // the SetSessionKey makes a copy of the peer session key, it is safe to free the buffers
+                        free(peer_session_key);
+                        free(secret);
+                        EVP_MD_CTX_free(hash_ctx);
+                        EVP_PKEY_CTX_free(kd_ctx);
+                        
+                    }
+                    EVP_PKEY_free(peer_dh_pubkey);
                 }
-
-                // instantiate shared secret
-                unsigned char* secret;
-
-                size_t secret_length;
-                EVP_PKEY_derive(kd_ctx,NULL,&secret_length);
-
-                // deriving
-                secret = (unsigned char*)malloc(secret_length);
-                EVP_PKEY_derive(kd_ctx,secret,&secret_length);
-
-                // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
-                EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
-
-                unsigned char* peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
-                unsigned int peer_session_key_length;
-                EVP_DigestInit(hash_ctx,EVP_sha256());
-                EVP_DigestUpdate(hash_ctx,secret,secret_length);
-                EVP_DigestFinal(hash_ctx, peer_session_key, &peer_session_key_length);
-                // save session key to clientelement object
-                user->SetSessionKey(peer_session_key, peer_session_key_length);
-                // the SetSessionKey makes a copy of the peer session key, it is safe to free the buffers
-                free(peer_session_key);
-                free(secret);
-                EVP_MD_CTX_free(hash_ctx);
-                EVP_PKEY_CTX_free(kd_ctx);
-                EVP_PKEY_free(peer_dh_pubkey);
+                free(buffer);
+                free(cl_sign);
             }
-            free(data_buffer);
-            free(buffer);
-            free(cl_sign);
         break;
-
-        case chat_request_code:
+        }
+        case chat_request_code:{
+            // open the message->data field, read the user ID within, send that user a "start chat with this user" message
+            if(!message->getData(&data_buffer, &data_buf_len)){
+                perror("Failed to get data field from message.");
+                error = true;
+            }
+            if(!error){
+                std::string wanna_chat_with_user(reinterpret_cast<char const*>(data_buffer), data_buf_len);
+                ClientElement* contact = get_user_by_id(wanna_chat_with_user);
+                // check if that user exists, if they aren't busy, and if the requesting user isn't busy
+                if(contact != NULL && contact->GetPartnerName() == "" && user->GetPartnerName() == ""){
+                    // everything looks alright, we can forward the chat request
+                    Message* reply = new Message();
+                    int32_t ret = 0;
+                    ret =+ reply->SetCounter(contact->GetCounterTo());
+                    ret =+ reply->SetOpCode(chat_request_received_code);
+                    ret =+ reply->setData(data_buffer, data_buf_len);
+                    ret =+ reply->Encode_message(contact->GetSessionKey());
+                    if(ret == 0)
+                        ret =+ reply->SendMessage(contact->GetSocketID(), contact);
+                    free(reply);
+                    // remember to set both user and contact as busy!
+                    if(ret == 0){
+                        user->SetPartnerName(contact->GetUsername());
+                        contact->SetPartnerName(user->GetUsername());
+                    }else
+                        error = true;
+                }else
+                    error = true;
+                if(error){
+                    *error_code = chat_request_denied_code;
+                }
+            }
     	break;
-
+        }
+        case chat_request_accept_code:{
+            // the partner has agreed to chat, notify the requester and send both users their partner's public key
+            ClientElement* target = NULL;
+            int opCode = 0;
+            if(!message->getData(&data_buffer, &data_buf_len)){
+                // the data buffer failed to read
+                perror("Failed to get data field from message.");
+                *error_code = chat_request_denied_code;
+                error = true;
+            }
+            // instantiate and send message for user (Bob)
+            if(!error){
+                Message* reply = new Message();
+                int32_t ret = 0;
+                ret += reply->SetOpCode(peer_public_key_msg_code);
+                ret += reply->SetCounter(user->GetCounterTo());
+                // the public key must be shared as BIO
+                BIO* pubkey_bio = BIO_new(BIO_s_mem());
+                unsigned char* pubkey_buffer;
+                PEM_write_bio_PUBKEY(pubkey_bio, user->GetPublicKey());
+                // place it on an unsigned char buffer and get its length
+                long pem_size = BIO_get_mem_data(pubkey_bio, &pubkey_buffer);
+                // concat length + key in an unsigned char buffer
+                unsigned char* send_buffer = new unsigned char[pem_size+sizeof(long)];
+                memcpy(send_buffer,&pem_size, sizeof(long));
+                memcpy(send_buffer+sizeof(long),pubkey_buffer, pem_size);
+                // finally add it to the message
+                ret += reply->setData(send_buffer, pem_size+sizeof(long));
+                ret += reply->Encode_message(user->GetSessionKey());
+                if(ret == 0)
+                    ret += reply->SendMessage(socket, user);
+                free(pubkey_buffer);
+                BIO_free(pubkey_bio);
+                free(send_buffer);
+                free(reply);
+                if(ret != 0){
+                    // an error occurred communicating with Bob, telling Alice the request was denied
+                    *error_code = chat_request_denied_code;
+                    error = true;
+                }
+            }
+            // instantiate and send message for partner (Alice)
+            if(!error){
+                ClientElement *partner = get_user_by_id(user->GetPartnerName());
+                Message* reply = new Message();
+                int32_t ret = 0;
+                ret += reply->SetOpCode(chat_request_accept_code);
+                ret += reply->SetCounter(partner->GetCounterTo());
+                // the public key must be shared as BIO
+                BIO* pubkey_bio = BIO_new(BIO_s_mem());
+                unsigned char* pubkey_buffer;
+                PEM_write_bio_PUBKEY(pubkey_bio, partner->GetPublicKey());
+                // place it on an unsigned char buffer and get its length
+                long pem_size = BIO_get_mem_data(pubkey_bio, &pubkey_buffer);
+                // concat length + key in an unsigned char buffer
+                unsigned char* send_buffer = new unsigned char[pem_size+sizeof(long)];
+                memcpy(send_buffer,&pem_size, sizeof(long));
+                memcpy(send_buffer+sizeof(long),pubkey_buffer, pem_size);
+                // finally add it to the message
+                ret += reply->setData(send_buffer, pem_size+sizeof(long));
+                ret += reply->Encode_message(partner->GetSessionKey());
+                if(ret == 0)
+                    ret += reply->SendMessage(socket, partner);
+                free(reply);
+                free(pubkey_buffer);
+                BIO_free(pubkey_bio);
+                free(send_buffer);
+                if(ret != 0){
+                    // an error occurred communicating with Alice, telling Bob the chat has ended
+                    *error_code = closed_chat_code;
+                    error = true;
+                }
+            }
+        break;
+        }
+        case chat_request_denied_code:{
+            ClientElement *target = get_user_by_id(user->GetPartnerName());
+            if(target != NULL){
+                Message* reply = new Message();
+                int ret = 0;
+                ret += reply->SetCounter(target->GetCounterTo());
+                ret += reply->SetOpCode(chat_request_denied_code);
+                ret += reply->setData(NULL, 0);
+                ret += reply->Encode_message(target->GetSessionKey());
+                if(ret == 0){
+                    ret += reply->SendMessage(target->GetSocketID(), target);
+                    if(ret != 0)
+                        force_quit_socket(target->GetSocketID(), 0);
+                }
+                else
+                    error = true;
+                free(reply);
+                // zero out the partners
+                target->SetPartnerName("");
+            }
+            user->SetPartnerName("");
+        break;
+        }
+        case nonce_msg_code:{
+            error = message_passthrough(user, message);
+        break;
+        }
+        case first_key_negotiation_code:{
+            error = message_passthrough(user, message);
+        break;
+        }
+        case second_key_negotiation_code:{
+            error = message_passthrough(user, message);
+        break;
+        }
+        case peer_message_code:{
+            error = message_passthrough(user, message);
+        break;
+        }
     }
+    free(data_buffer);
 }  
 
 int main(void)
 { 
-    fd_set master;    // master file descriptor list
+    
     fd_set read_fds;  // temp file descriptor list for select()
     int fdmax;        // maximum file descriptor number
 
@@ -356,6 +549,7 @@ int main(void)
 
         // run through the existing connections looking for data to read
         for(i = 0; i <= fdmax; i++) {
+            int32_t error_code = 0;
             if (FD_ISSET(i, &read_fds)) { // we got one!!
                 if (i == listener) {
                     // handle new connections
@@ -392,7 +586,7 @@ int main(void)
                         } else {
                             perror("recv");
                         }
-                        force_quit_socket(i);
+                        force_quit_socket(i, closed_chat_code);
                         FD_CLR(i, &master); // remove from master set
                     } else {
                         // we got some data from a client and we read the total message size and saved to buf
@@ -409,7 +603,7 @@ int main(void)
                         if(!encrypted_message){
                             Message* message = new Message();
                             message->Unwrap_unencrypted_message(msg_buf, msg_len_buf);
-                            HandleMessage(sv_pr_key, SV_cert, message, i);
+                            HandleMessage(sv_pr_key, SV_cert, message, i, &error_code);
                             delete(message);                            
                         } else {
                             Message* message = new Message();
@@ -418,24 +612,22 @@ int main(void)
                                 if(!message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey())){
                                     string error_message = "Message from user "+tmpIterator->second->GetUsername()+" couldn't be decrypted, disconnecting them.";
                                     perror(error_message.c_str());
-                                    force_quit_socket(i);
-                                    FD_CLR(i, &master); // remove from master set
+                                    force_quit_socket(i, closed_chat_code);
                                 }else{
-                                    HandleMessage(sv_pr_key, SV_cert, message, i);
+                                    // HandleMessage(sv_pr_key, SV_cert, message, i);
                                     if(tmpIterator->second->GetCounterFrom() != message->GetCounter()){
                                         string error_message = "User "+tmpIterator->second->GetUsername()+" counter's is out of synch, disconnecting them.";
                                         perror(error_message.c_str());
-                                        force_quit_socket(i);
-                                        FD_CLR(i, &master); // remove from master set
+                                        force_quit_socket(i, closed_chat_code);
                                     }else{
                                         tmpIterator->second->IncreaseCounterFrom();
-                                        HandleMessage(sv_pr_key, SV_cert, message, i);
+                                        if(!HandleMessage(sv_pr_key, SV_cert, message, i, &error_code))
+                                            force_quit_socket(i, error_code);
                                     }
                                 }
                             } else{
                                 perror("No client connected on socket! Something failed with the handshake!");
-                                force_quit_socket(i);
-                                FD_CLR(i, &master); // remove from master set
+                                force_quit_socket(i, closed_chat_code);
                             }
                             delete(message);  
                         }

@@ -85,10 +85,10 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
     return 0;
 }
 
-int32_t Message::getData(unsigned char* buffer, int32_t* datadim){
+int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
     if(this->data != NULL){
         *datadim = this->data_dim;
-        buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char));
+        *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char));
         memcpy(buffer, this->data, this->data_dim);
         return 0;
     }else
