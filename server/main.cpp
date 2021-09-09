@@ -49,6 +49,40 @@ ClientElement* get_user_by_socket(int socket){
     else return NULL;
 }
 
+void force_quit_socket(int i){
+    close(i); // bye!
+    // removing from connectedClients and deleting the client object
+    auto tmpIterator = connectedClientsBySocket.find(i);
+    if(tmpIterator != connectedClientsBySocket.end())
+    {
+        std::string tmpUsername = tmpIterator->second->GetUsername();
+        if(!tmpUsername.empty()){
+            // this user has a username, it might have a partner
+            // alerting a potential chat partner that this user disconnected
+            std::string partnerName = tmpIterator->second->GetPartnerName();
+            Message* message = new Message();
+            message->SetOpCode(closed_chat_code);
+            auto tmpPartnerIterator = connectedClientsByUsername.find(partnerName);
+            ClientElement* chatPartner = tmpPartnerIterator->second;
+            message->SetCounter(chatPartner->GetCounterTo());
+            message->setData(NULL, 0);
+            message->Encode_message(chatPartner->GetSessionKey());
+            message->SendMessage(chatPartner->GetSocketID(), chatPartner);
+            // after alerting that user, we clear its chat partner field
+            chatPartner->SetPartnerName("");
+            // this user has a username, 
+            // we can find the corresponding user object
+            auto usernameIterator = connectedClientsByUsername.find(tmpUsername);
+            if(usernameIterator != connectedClientsByUsername.end()){
+                connectedClientsByUsername.erase(usernameIterator);
+            } else
+                perror("While cleaning a timed out connection, user Object had a non-empty username but no corresponding entry in ConnectedClientsByUsername was found.");
+        }
+        delete(tmpIterator->second);
+        connectedClientsBySocket.erase(tmpIterator);
+    }
+}
+
 int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* message, int socket){
     int32_t data_buf_len = 0;
     bool error = false;
@@ -356,37 +390,7 @@ int main(void)
                         } else {
                             perror("recv");
                         }
-                        close(i); // bye!
-                        // removing from connectedClients and deleting the client object
-                        auto tmpIterator = connectedClientsBySocket.find(i);
-                        if(tmpIterator != connectedClientsBySocket.end())
-                        {
-                            std::string tmpUsername = tmpIterator->second->GetUsername();
-                            if(!tmpUsername.empty()){
-                                // this user has a username, it might have a partner
-                                // alerting a potential chat partner that this user disconnected
-                                std::string partnerName = tmpIterator->second->GetPartnerName();
-                                Message* message = new Message();
-                                message->SetOpCode(closed_chat_code);
-                                auto tmpPartnerIterator = connectedClientsByUsername.find(partnerName);
-                                ClientElement* chatPartner = tmpPartnerIterator->second;
-                                message->SetCounter(chatPartner->GetCounterTo());
-                                message->setData(NULL, 0);
-                                message->Encode_message(chatPartner->GetSessionKey());
-                                message->SendMessage(chatPartner->GetSocketID(), chatPartner);
-                                // after alerting that user, we clear its chat partner field
-                                chatPartner->SetPartnerName("");
-                                // this user has a username, 
-                                // we can find the corresponding user object
-                                auto usernameIterator = connectedClientsByUsername.find(tmpUsername);
-                                if(usernameIterator != connectedClientsByUsername.end()){
-                                    connectedClientsByUsername.erase(usernameIterator);
-                                } else
-                                    perror("While cleaning a timed out connection, user Object had a non-empty username but no corresponding entry in ConnectedClientsByUsername was found.");
-                            }
-                            delete(tmpIterator->second);
-                            connectedClientsBySocket.erase(tmpIterator);
-                        }
+                        force_quit_socket(i);
                         FD_CLR(i, &master); // remove from master set
                     } else {
                         // we got some data from a client and we read the total message size and saved to buf
@@ -411,6 +415,12 @@ int main(void)
                             if(tmpIterator != connectedClientsBySocket.end())
                             {
                                 message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey());
+                                if(tmpIterator->second->GetCounterFrom() != message->GetCounter()){
+                                    string error_message = "User "+tmpIterator->second->GetUsername()+" counter's is out of synch, disconnecting them.";
+                                    perror(error_message.c_str());
+                                    force_quit_socket(i);
+                                    FD_CLR(i, &master); // remove from master set
+                                }
                                 HandleMessage(sv_pr_key, SV_cert, message, i);
                             }
                             delete(message);  
