@@ -22,6 +22,10 @@ ClientElement::~ClientElement()
 	
 }
 
+bool ClientElement::CounterSizeCheck(){
+    return(counter_to+1 == INT_MAX || counter_from+1 == INT_MAX);
+}
+
 int ClientElement::SetUsername(std::string username){
     this->user_id = username;
     if(!get_keys(username, &this->public_key)){

@@ -23,6 +23,24 @@
 std::map<int, ClientElement*> connectedClientsBySocket;
 std::map<std::string, ClientElement*> connectedClientsByUsername;
 
+// returns the length of the allocated buffer
+// inserts all active clients, separated by null terminator
+// TODO: limit reply size to INT_MAX
+int serialize_active_clients(unsigned char** buffer){
+    std::map<std::string, ClientElement*>::iterator it;
+    int cursor = 0;
+    for (it = connectedClientsByUsername.begin(); it != connectedClientsByUsername.end(); it++)
+    {
+        string username = it->second->GetUsername();
+        int32_t len_of_username = username.length();
+        memcpy(&buffer+cursor, &len_of_username, sizeof(int32_t));
+        cursor += sizeof(int32_t);
+        memcpy(&buffer+cursor, username.c_str(), len_of_username);
+        cursor += len_of_username;
+    }
+    return cursor;
+}
+
 fd_set master;    // master file descriptor list
 
 // get sockaddr, IPv4 or IPv6:
@@ -53,7 +71,7 @@ ClientElement* get_user_by_socket(int socket){
 
 // functions specifically for sending errors between peers
 // it cannot transfer data
-int peer_error(ClientElement* target, int opCode){
+int peer_error(ClientElement* target, int opCode, bool isRealError){
     // notify partner the chat has been aborted
     Message* reply = new Message();
     reply->SetCounter(target->GetCounterTo());
@@ -63,17 +81,19 @@ int peer_error(ClientElement* target, int opCode){
     reply->SendMessage(target->GetSocketID(), target);
     free(reply);
     // zero out the partners
-    target->SetPartnerName("");
     get_user_by_id(target->GetPartnerName())->SetPartnerName("");
+    target->SetPartnerName("");
     // print error
-    string error_message = "Had a ["+to_string(opCode)+"] error for client " + target->GetUsername();
-    perror(error_message.c_str());
+    if(isRealError){
+        string error_message = "Had a ["+to_string(opCode)+"] error for client " + target->GetUsername();
+        perror(error_message.c_str());
+    }
 }
 
 // @param
 // i:       the socket on which the erroring client is connected
 // opCode:  the opCode we will send to the erroring client's potential partner
-void force_quit_socket(int i, int opCode){
+void force_quit_socket(int i, int opCode, bool isRealError){
     close(i); // bye!
     // removing from connectedClients and deleting the client object
     auto tmpIterator = connectedClientsBySocket.find(i);
@@ -85,7 +105,7 @@ void force_quit_socket(int i, int opCode){
             // alerting a potential chat partner that this user disconnected
             std::string partnerName = tmpIterator->second->GetPartnerName();
             if(opCode != 0 && partnerName != ""){
-                peer_error(get_user_by_id(partnerName), opCode);
+                peer_error(get_user_by_id(partnerName), opCode, isRealError);
             }
             // this user has a username, 
             // we can find the corresponding user object
@@ -127,7 +147,7 @@ bool message_passthrough(ClientElement* user, Message* message){
     if(ret == 0){
         ret += reply->SendMessage(target->GetSocketID(), target);
         if(ret != 0){
-            force_quit_socket(target->GetSocketID(), 0);
+            force_quit_socket(target->GetSocketID(), 0, true);
             error = true;
         }
     }else
@@ -144,6 +164,19 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
     unsigned char* data_buffer = NULL;
     if(user == NULL){
         perror("Woah nelly!");
+        return 1;
+    }
+    if(user->CounterSizeCheck()){
+        // the user's to or from counter reached INT_MAX(!!) size
+        // gotta put them in the timeout box
+        *error_code = closed_chat_code;
+        Message* reply = new Message();
+        reply->SetCounter(user->GetCounterTo());
+        reply->SetOpCode(forced_logout_code);
+        reply->setData(NULL, 0);
+        reply->Encode_message(user->GetSessionKey());
+        reply->SendMessage(user->GetSocketID(), user);
+        free(reply);
         return 1;
     }
     switch(message->GetOpCode()) {
@@ -426,7 +459,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 if(ret == 0){
                     ret += reply->SendMessage(target->GetSocketID(), target);
                     if(ret != 0)
-                        force_quit_socket(target->GetSocketID(), 0);
+                        error = true;
                 }
                 else
                     error = true;
@@ -451,6 +484,53 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
         }
         case peer_message_code:{
             error = message_passthrough(user, message);
+        break;
+        }
+        case end_chat_code:{
+            ClientElement *target = get_user_by_id(user->GetPartnerName());
+            if(target == NULL){
+                error = true;
+            }
+            if(!error){
+                Message* reply = new Message();
+                int ret = 0;
+                ret += reply->SetCounter(target->GetCounterTo());
+                ret += reply->SetOpCode(closed_chat_code);
+                ret += reply->Encode_message(target->GetSessionKey());
+                if(ret == 0){
+                    ret += reply->SendMessage(target->GetSocketID(), target);
+                    if(ret != 0){
+                        force_quit_socket(target->GetSocketID(), 0, true);
+                        error = true;
+                    }
+                }else
+                    error = true;
+                free(reply);
+                target->SetPartnerName("");
+                user->SetPartnerName("");
+            }
+        break;
+        }
+        case logout_code:{
+            force_quit_socket(socket, closed_chat_code, false);
+        break;
+        }
+        case list_request_code:{
+            data_buf_len = serialize_active_clients(&data_buffer);
+            Message* reply = new Message();
+            int ret = 0;
+            ret += reply->SetCounter(user->GetCounterTo());
+            ret += reply->SetOpCode(list_code);
+            ret += reply->setData(data_buffer, data_buf_len);
+            ret += reply->Encode_message(user->GetSessionKey());
+            if(ret == 0){
+                ret += reply->SendMessage(user->GetSocketID(), user);
+                if(ret != 0)
+                    error = true;
+            }
+            else
+                error = true;
+            free(reply);
         break;
         }
     }
@@ -593,7 +673,7 @@ int main(void)
                         } else {
                             perror("recv");
                         }
-                        force_quit_socket(i, closed_chat_code);
+                        force_quit_socket(i, closed_chat_code, true);
                         FD_CLR(i, &master); // remove from master set
                     } else {
                         // we got some data from a client and we read the total message size and saved to buf
@@ -619,22 +699,22 @@ int main(void)
                                 if(!message->Decode_message(msg_buf, msg_len_buf, tmpIterator->second->GetSessionKey())){
                                     string error_message = "Message from user "+tmpIterator->second->GetUsername()+" couldn't be decrypted, disconnecting them.";
                                     perror(error_message.c_str());
-                                    force_quit_socket(i, closed_chat_code);
+                                    force_quit_socket(i, closed_chat_code, true);
                                 }else{
                                     // HandleMessage(sv_pr_key, SV_cert, message, i);
                                     if(tmpIterator->second->GetCounterFrom() != message->GetCounter()){
                                         string error_message = "User "+tmpIterator->second->GetUsername()+" counter's is out of synch, disconnecting them.";
                                         perror(error_message.c_str());
-                                        force_quit_socket(i, closed_chat_code);
+                                        force_quit_socket(i, closed_chat_code, true);
                                     }else{
                                         tmpIterator->second->IncreaseCounterFrom();
                                         if(!HandleMessage(sv_pr_key, SV_cert, message, i, &error_code))
-                                            force_quit_socket(i, error_code);
+                                            force_quit_socket(i, error_code, true);
                                     }
                                 }
                             } else{
                                 perror("No client connected on socket! Something failed with the handshake!");
-                                force_quit_socket(i, closed_chat_code);
+                                force_quit_socket(i, closed_chat_code, true);
                             }
                             delete(message);  
                         }

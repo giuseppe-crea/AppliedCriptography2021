@@ -6,6 +6,7 @@
 #include "aes_base_support.cpp"
 #include "ClientElement.hpp"
 
+const int MAX_PAYLOAD_SIZE = 40000;
 const int32_t STATIC_POSTFIX = 28;
 	
 Message::Message()
@@ -79,10 +80,13 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
         this->data_dim = 0;
         return 0;
     }
-    this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
-    memcpy(this->data, buffer, buffer_dim);
-    this->data_dim = buffer_dim;
-    return 0;
+    if(buffer_dim < MAX_PAYLOAD_SIZE){
+        this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
+        memcpy(this->data, buffer, buffer_dim);
+        this->data_dim = buffer_dim;
+        return 0;
+    }
+    return 1;
 }
 
 int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
