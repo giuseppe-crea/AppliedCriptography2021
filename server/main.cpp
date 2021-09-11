@@ -11,13 +11,15 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <map>
+#include <fcntl.h>
 #include <openssl/rand.h>
 #include "ClientElement.hpp"
 #include "Message.cpp"
 #include "auth.cpp"
 #include "../client/signature_utilities.cpp"
 
-#define PORT "9034"   // port we're listening on
+#define SERVER_IPV4_ADDR "127.0.0.1"
+#define PORT 9034   // port we're listening on
 // two maps that point to the same clientelement objects
 std::map<int, ClientElement*> connectedClientsBySocket;
 std::map<std::string, ClientElement*> connectedClientsByUsername;
@@ -590,6 +592,7 @@ int main(void)
 	sv_pr_key = PEM_read_PrivateKey(pem_sv_prvkey,NULL,NULL,NULL);
 
 	// get us a socket and bind it
+    /*
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
@@ -626,12 +629,42 @@ int main(void)
     }
 
 	freeaddrinfo(ai); // all done with this
+    */
+
+    // alternative set listener
+    listener = socket(AF_INET, SOCK_STREAM, 0);
+    if(listener < 0) {
+        perror("socket");
+        exit(2);
+    }
+    int reuse = 1;
+    if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0) {
+        perror("setsockopt");
+        exit(2);
+    }
+
+    struct sockaddr_in my_addr;
+    memset(&my_addr, 0, sizeof(my_addr));
+    my_addr.sin_family = AF_INET;
+    my_addr.sin_addr.s_addr = inet_addr(SERVER_IPV4_ADDR);
+    my_addr.sin_port = htons(PORT);
+
+    if (bind(listener, (struct sockaddr*)&my_addr, sizeof(struct sockaddr)) != 0) {
+        perror("bind");
+        return -1;
+    }
 
     // listen
     if (listen(listener, 10) == -1) {
         perror("listen");
         exit(3);
     }
+    printf("Accepting connections on port %d.\n", (int)PORT);
+
+    /* Set nonblock for stdin. */
+    int flag = fcntl(STDIN_FILENO, F_GETFL, 0);
+    flag |= O_NONBLOCK;
+    fcntl(STDIN_FILENO, F_SETFL, flag);
 
     // add the listener to the master set
     FD_SET(listener, &master);
@@ -641,7 +674,7 @@ int main(void)
 
     cout << "Starting the Main Loop" << endl;
     // main loop
-    for(;;) {
+    while(1) {
         read_fds = master; // copy it
         cout << "Inside Main Loop" << endl;
         cout << listener << endl;
