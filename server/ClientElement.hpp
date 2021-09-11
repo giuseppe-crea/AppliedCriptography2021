@@ -23,7 +23,8 @@ class ClientElement
 		int session_key_len;
 		long tosend_dh_key_size;
 		long received_dh_key_size;
-		BIO* pub_dh_key_to_send;
+		unsigned char* pub_dh_key_to_send;
+		BIO* peer_dh_pubkey_pem;
 		BIO* pub_dh_key_received;
 		EVP_PKEY* pri_dh_key;
 		EVP_PKEY* public_key;
@@ -53,9 +54,7 @@ class ClientElement
 		int GetSocketID();
 		void SetSocketID(int socket);
 		EVP_PKEY* GetPrivateDHKey();
-		int SetPrivateDHKey(EVP_PKEY* key);
 		BIO* GetOurPublicDHKey();
-		int SetOurPublicDHKey(BIO* key);
 		BIO* GetPeerPublicDHKey();
 		int SetPeerPublicDHKey(BIO* key, long keysize);
 		long GetToSendPubDHKeySize();
@@ -64,6 +63,7 @@ class ClientElement
 		void SetSessionKey(unsigned char* key, int key_len);
 		unsigned char* GetSessionKey();
 		unsigned char* GetSessionKey(int* len);
+		int GenerateKeysForUser();
 		~ClientElement();
 
 };

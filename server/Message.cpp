@@ -3,7 +3,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "ClientElement.hpp"
+#include "ClientElement.cpp"
 #include "aes_base_support.cpp"
 
 const int MAX_PAYLOAD_SIZE = 40000;
@@ -92,8 +92,11 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
 int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
     if(this->data != NULL){
         *datadim = this->data_dim;
+        printf("[getData]: Allocating buffer.\n");
         *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char));
-        memcpy(buffer, this->data, this->data_dim);
+        printf("[getData]: Copying into buffer %d bytes.\n", this->data_dim);
+        memcpy(*buffer, this->data, this->data_dim);
+        printf("[getData]: \"%s\"\n",this->data);
         return 0;
     }else
         return 1;

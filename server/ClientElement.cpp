@@ -95,28 +95,45 @@ EVP_PKEY* ClientElement::GetPrivateDHKey(){
     return this->pri_dh_key;
 }
 
-int ClientElement::SetPrivateDHKey(EVP_PKEY* key){
-    if(this->pri_dh_key == NULL){
-        if(key != NULL){
-            this->pri_dh_key = key;
-            return 0;
-        }
-    }
-    return 1;
-}
-
 BIO* ClientElement::GetOurPublicDHKey(){
-    return this->pub_dh_key_to_send;
+    return this->peer_dh_pubkey_pem;
 }
 
-int ClientElement::SetOurPublicDHKey(BIO* key){
-    if(this->pub_dh_key_to_send == NULL){
-        if(key != NULL){
-            this->tosend_dh_key_size = BIO_get_mem_data(key,this->pub_dh_key_to_send);
-            return 0;
-        }
+int ClientElement::GenerateKeysForUser(){
+    // declare variables for key and context
+    EVP_PKEY* dh_params;
+    EVP_PKEY_CTX* pctx;
+
+    // load elliptic curve parameters
+    pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
+    EVP_PKEY_paramgen_init(pctx);
+    EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx,NID_X9_62_prime256v1);
+    EVP_PKEY_paramgen(pctx,&dh_params);
+    EVP_PKEY_CTX_free(pctx);
+
+    // create my DH key for this user
+    EVP_PKEY_CTX* kg_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
+    EVP_PKEY_keygen_init(kg_ctx);
+    int ret_pv = EVP_PKEY_keygen(kg_ctx,&pri_dh_key);
+    EVP_PKEY_CTX_free(kg_ctx);
+
+    // save public key in pem format in a memory BIO
+    peer_dh_pubkey_pem = BIO_new(BIO_s_mem());
+    int ret_pb = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,pri_dh_key);
+    // save private key the same way
+    // BIO* peer_dh_prvkey_pem = BIO_new(BIO_s_mem());
+    // int ret_pv = PEM_write_bio_PrivateKey(peer_dh_prvkey_pem,peer_dh_prvkey);
+    // check for errors during serialization
+    if((ret_pb || ret_pv) == 0){
+        string type = ret_pb == 0 ? "public" : "private";
+        string error = "Error serializing my own "+type+" DH-K PEM for user "+ user_id +".";
+        perror(error.c_str());
+        return -1;
     }
-    return 1;
+    // save the key we send the user as BIO, and the private key we generate for that user as PEM
+    this->tosend_dh_key_size = BIO_get_mem_data(peer_dh_pubkey_pem, pub_dh_key_to_send);
+    EVP_PKEY_free(dh_params);
+    return 0;
 }
 
 BIO* ClientElement::GetPeerPublicDHKey(){

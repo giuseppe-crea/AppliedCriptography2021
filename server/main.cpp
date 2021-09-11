@@ -15,7 +15,6 @@
 #include <openssl/rand.h>
 #include "ClientElement.hpp"
 #include "Message.cpp"
-#include "auth.cpp"
 #include "../client/signature_utilities.cpp"
 
 #define SERVER_IPV4_ADDR "127.0.0.1"
@@ -187,16 +186,28 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             // very first message of an authentication procedure
             // data contains, in order:
             // nonce, username
-            int32_t nonce_user = -1;
+            int32_t nonce_user;
+            printf("[HM1]: Reading data from message.\n");
             if(!message->getData(&data_buffer, &data_buf_len)){
+                printf("[HM1]: Done reading.\n");
                 // copy sizeof(int32_t) bytes from buffer to nonce
                 memcpy(&nonce_user, data_buffer, sizeof(int32_t));
                 // copy data_buf_len - sizeof(int32_t) bytes into username
-                std::string username(reinterpret_cast<char*>(data_buffer+sizeof(int32_t)), data_buf_len - sizeof(int32_t));
+                printf("[HM1]: reading username...\n");
+                printf("[HM1]: %s\n",data_buffer);
+                unsigned char* username_buffer = new unsigned char[data_buf_len-sizeof(int32_t)];
+                memcpy(username_buffer, data_buffer+sizeof(int32_t), data_buf_len-sizeof(int32_t));
+                memcpy(username_buffer+data_buf_len-sizeof(int32_t)-1, "\0", 1);
+                // std::string username(reinterpret_cast<char*>(data_buffer+sizeof(int32_t)), data_buf_len - sizeof(int32_t));
+                string username = (reinterpret_cast<char*>(username_buffer));
+                printf("[HM1]: %s\n",username.c_str());
                 // add a mapping (username, clientelement) for this user
+                printf("[HM1]: Instantiating a username - clientelement mapping for this user.\n");
                 connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, user));
                 // WARNING: This operation also loads the related public key
+                printf("[HM1]: Setting username.\n");
                 user->SetUsername(username);
+                printf("[HM1]: Setting received Nonce.\n");
                 user->SetNonceReceived(nonce_user);
             }else{
                 perror("first auth message: getdata");
@@ -204,7 +215,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 return 1;
             }
             // generate DH keys for this user
-            if(!(user != NULL || GenerateKeysForUser(user))){
+            if(!(user != NULL || user->GenerateKeysForUser())){
                 perror("DH Key generation failed");
                 free(data_buffer);
                 return 1;
@@ -216,47 +227,63 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             // [int32_t] size signature(pem+nonce); [size of signature] signature(pem+ nonce);
             // [tot size so far - size] server-cert
             // gen new nonce
+            printf("[HM1]: Initializing reply values.\n");
             int32_t ns;
 	        RAND_bytes((unsigned char*)&ns, sizeof(int32_t));
+            printf("[HM1]: Setting sent nonce.\n");
             user->SetNonceSent(ns);
+            printf("[HM1]: Getting public DH key size.\n");
             long pem_size = user->GetToSendPubDHKeySize();
             // signature of received nonce and pem
             unsigned char* pem_buffer;
 			unsigned char* pt = new unsigned char[pem_size+sizeof(int32_t)];
             int32_t na = user->GetNonceReceived();
+            printf("[HM1]: Copying pem into plaintext buffer.\n");
 			memcpy(pt, pem_buffer, pem_size);
 			memcpy(pt+pem_size, &na, sizeof(int32_t));
             unsigned char* cl_sign;
 			unsigned int cl_sign_size;
+            printf("[HM1]: Generating signature.\n");
             signature(server_private_key, pt, &cl_sign, pem_size+sizeof(int32_t), &cl_sign_size);
             // load server cert
+            printf("[HM1]: Loading Server Cert.\n");
             BIO* serv_cert_BIO = BIO_new(BIO_s_mem());
             unsigned char* serv_cert_buffer;
             PEM_write_bio_X509(serv_cert_BIO, server_cert);
             long cert_size = BIO_get_mem_data(serv_cert_BIO, &serv_cert_buffer);
+            printf("[HM1]: cert size: %ld.\n", cert_size);
             // put it all together
+            printf("[HM1]: Writing it all to buffer.\n");
             unsigned char* buffer = new unsigned char[(2*sizeof(int32_t))+sizeof(long)+pem_size+cl_sign_size+cert_size];
             int cursor = 0;
+            printf("[HM1]: NS: %d.\n", ns);
             memcpy(buffer,&ns,sizeof(int32_t));
             cursor += sizeof(int32_t);
+            printf("[HM1]: Pem_size: %ld\n", pem_size);
             memcpy(buffer+cursor,&pem_size,sizeof(long));
             cursor += sizeof(long);
+            printf("[HM1]: pem_buffer: fidati.\n");
             memcpy(buffer+cursor,pem_buffer,pem_size);
             cursor += pem_size;
+            printf("[HM1]: signature size: %d.\n", cl_sign_size);
             memcpy(&buffer+cursor,&cl_sign_size,sizeof(int32_t));
             cursor += sizeof(int32_t);
+            printf("[HM1]: CL. Fidati di nuovo.\n");
             memcpy(&buffer+cursor,cl_sign,cl_sign_size);
             cursor += cl_sign_size;
+            printf("[HM1]: Server Cert.\n");
             memcpy(&buffer+cursor, serv_cert_buffer, cert_size);
             cursor += cert_size;
 
             // and finally build the reply message and send it
+            printf("[HM1]: Instantiating and sending reply message.\n");
             Message* reply = new Message();
             reply->SetOpCode(second_auth_msg_code);
             reply->setData(buffer, cursor);
             reply->SendUnencryptedMessage(socket);
             
             // free all the buffers
+            printf("[HM1]: Freeing memory.\n");
             free(pem_buffer);
             free(pt);
             free(cl_sign);
@@ -264,6 +291,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             free(serv_cert_buffer);
             BIO_free(serv_cert_BIO);
             delete(reply);
+            printf("[HM1]: Done.\n");
         break;
         } 
         case final_auth_msg_code:{
@@ -671,14 +699,13 @@ int main(void)
 
     // keep track of the biggest file descriptor
     fdmax = listener; // so far, it's this one
-
+    printf("Listener's FD: [%d]\nMaximum FD: [%d]\n", listener, fdmax);
     cout << "Starting the Main Loop" << endl;
     // main loop
     while(1) {
         read_fds = master; // copy it
         cout << "Inside Main Loop" << endl;
-        cout << listener << endl;
-        cout << fdmax << endl;
+        printf("Listener's FD: [%d]\nMaximum FD: [%d]\n", listener, fdmax);
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
             perror("select");
             cout << "Select failed" << endl;
@@ -689,8 +716,10 @@ int main(void)
         for(i = 0; i <= fdmax; i++) {
             int32_t error_code = 0;
             if (FD_ISSET(i, &read_fds)) { // we got one!!
+                printf("FD_ISSET! FD number: %d\n", i);
                 if (i == listener) {
                     // handle new connections
+                    cout << "It's the listener!" << endl;
                     addrlen = sizeof remoteaddr;
 					newfd = accept(listener,
 						(struct sockaddr *)&remoteaddr,
@@ -715,6 +744,7 @@ int main(void)
                         connectedClientsBySocket.insert(std::pair<int, ClientElement*>(newfd, newClient));
                     }
                 } else {
+                    cout << "Not the listener!" << endl;
                     // handle data from a client
                     if ((nbytes = recv(i, &msg_len_buf, sizeof(int32_t), 0)) <= 0) {
                         // got error or connection closed by client
@@ -727,6 +757,7 @@ int main(void)
                         force_quit_socket(i, closed_chat_code, true);
                         FD_CLR(i, &master); // remove from master set
                     } else {
+                        cout << "Receiving message, determining if it is encrypted or not..." << endl;
                         // we got some data from a client and we read the total message size and saved to buf
                         // block to handle handshake messages
                         // these messages will have negative size to differentiate them from encrypted messages
@@ -739,11 +770,15 @@ int main(void)
                         if ((nbytes = recv(i, msg_buf, msg_len_buf, 0)) != msg_len_buf)
                             perror("recv");
                         if(!encrypted_message){
+                            cout << "Receiving unencrypted message" << endl;
                             Message* message = new Message();
                             message->Unwrap_unencrypted_message(msg_buf, msg_len_buf);
+                            cout << "Message unwrapped, handling it..." << endl;
                             HandleMessage(sv_pr_key, SV_cert, message, i, &error_code);
+                            cout << "Done handling the message! Freeing memory..." << endl;
                             delete(message);                            
                         } else {
+                            cout << "Receiving encrypted message" << endl;
                             Message* message = new Message();
                             auto tmpIterator = connectedClientsBySocket.find(i);
                             if(tmpIterator != connectedClientsBySocket.end()){
@@ -759,6 +794,7 @@ int main(void)
                                         force_quit_socket(i, closed_chat_code, true);
                                     }else{
                                         tmpIterator->second->IncreaseCounterFrom();
+                                        cout << "Message decrypted, handling it..." << endl;
                                         if(!HandleMessage(sv_pr_key, SV_cert, message, i, &error_code))
                                             force_quit_socket(i, error_code, true);
                                     }
@@ -768,6 +804,7 @@ int main(void)
                                 force_quit_socket(i, closed_chat_code, true);
                             }
                             delete(message);  
+                            cout << "Done handling the message! Freeing memory..." << endl;
                         }
                     }
                 } // END handle data from client
