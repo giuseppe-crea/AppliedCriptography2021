@@ -132,6 +132,7 @@ int ClientElement::GenerateKeysForUser(){
     }
     // save the key we send the user as BIO, and the private key we generate for that user as PEM
     this->tosend_dh_key_size = BIO_get_mem_data(peer_dh_pubkey_pem, pub_dh_key_to_send);
+    printf("[GenerateKeysForUsers] tosend_dh_key_size: %ld\n", tosend_dh_key_size);
     EVP_PKEY_free(dh_params);
     return 0;
 }

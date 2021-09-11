@@ -215,7 +215,12 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 return 1;
             }
             // generate DH keys for this user
-            if(!(user != NULL || user->GenerateKeysForUser())){
+            if(user == NULL){
+                perror("DH Key generation failed");
+                free(data_buffer);
+                return 1;
+            }
+            if(user->GenerateKeysForUser()){
                 perror("DH Key generation failed");
                 free(data_buffer);
                 return 1;
@@ -234,6 +239,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             user->SetNonceSent(ns);
             printf("[HM1]: Getting public DH key size.\n");
             long pem_size = user->GetToSendPubDHKeySize();
+            printf("[HM1]: Pem_size: %ld\n", pem_size);
             // signature of received nonce and pem
             unsigned char* pem_buffer;
 			unsigned char* pt = new unsigned char[pem_size+sizeof(int32_t)];
@@ -289,7 +295,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             free(cl_sign);
             free(buffer);
             free(serv_cert_buffer);
-            BIO_free(serv_cert_BIO);
+            //BIO_free(serv_cert_BIO); // corrupted size vs. prev_size while consolidating
             delete(reply);
             printf("[HM1]: Done.\n");
         break;
