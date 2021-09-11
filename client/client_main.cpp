@@ -69,11 +69,13 @@ int main(){
 	// identification of user
 	string cl_id;
 	string password;
-	string server_address;
+	int server_port;
 	cout << "Who are you?" << endl;
 	cin >> cl_id;
 	cout << "Please insert password" << endl;
 	cin >> password;
+	cout << "Please insert server port" << endl;
+	cin >> server_port;
 	//cout << "Enter the server's address:" << endl;
 	//cin >> server_address;
 
@@ -106,8 +108,9 @@ int main(){
 
 	serv_addr.sin_family = AF_INET;
 	//serv_addr.sin_addr.s_addr = inet_addr(server_address.c_str());
-	inet_pton(AF_INET,"192.168.178.22", &serv_addr.sin_addr);
-	serv_addr.sin_port = htons(PORT);//atoi(PORT.c_str());
+	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  	serv_addr.sin_port = htons(server_port);
+	// serv_addr.sin_port = htons(PORT);//atoi(PORT.c_str());
 	cout << "Address is set" << endl;
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0){
@@ -119,9 +122,9 @@ int main(){
 
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
         perror("ERROR connecting");
-	exit(1);
+		exit(1);
 	}
-	
+
 	cout << "Connected" << endl;
 	string peer_id;
 	

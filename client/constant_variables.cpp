@@ -37,5 +37,5 @@ const string list_request_cmd = ":list";
 const EVP_MD* md = EVP_sha256();
 
 // server connection info & utilities
-const string ADDRESS = "localhost";
+const string ADDRESS = "127.0.0.1";
 const int PORT = 9034;

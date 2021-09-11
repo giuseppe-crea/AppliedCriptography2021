@@ -541,6 +541,14 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
     return 0;
 }  
 
+in_port_t get_in_port(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET)
+        return (((struct sockaddr_in*)sa)->sin_port);
+
+    return (((struct sockaddr_in6*)sa)->sin6_port);
+}
+
 int main(void)
 { 
     
@@ -612,8 +620,10 @@ int main(void)
 	if (p == NULL) {
 		fprintf(stderr, "selectserver: failed to bind\n");
 		exit(2);
-	}else
-        cout << p->ai_protocol << endl;
+	}else{
+        
+        cout << get_in_port(p->ai_addr) << endl;
+    }
 
 	freeaddrinfo(ai); // all done with this
 
@@ -633,6 +643,9 @@ int main(void)
     // main loop
     for(;;) {
         read_fds = master; // copy it
+        cout << "Inside Main Loop" << endl;
+        cout << listener << endl;
+        cout << fdmax << endl;
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
             perror("select");
             cout << "Select failed" << endl;
