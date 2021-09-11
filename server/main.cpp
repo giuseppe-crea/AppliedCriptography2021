@@ -583,7 +583,7 @@ int main(void)
 
 	// get us a socket and bind it
 	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
@@ -612,7 +612,8 @@ int main(void)
 	if (p == NULL) {
 		fprintf(stderr, "selectserver: failed to bind\n");
 		exit(2);
-	}
+	}else
+        cout << p->ai_protocol << endl;
 
 	freeaddrinfo(ai); // all done with this
 
@@ -628,14 +629,16 @@ int main(void)
     // keep track of the biggest file descriptor
     fdmax = listener; // so far, it's this one
 
+    cout << "Starting the Main Loop" << endl;
     // main loop
     for(;;) {
         read_fds = master; // copy it
         if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1) {
             perror("select");
+            cout << "Select failed" << endl;
             exit(4);
         }
-
+        cout << "Select started" << endl;
         // run through the existing connections looking for data to read
         for(i = 0; i <= fdmax; i++) {
             int32_t error_code = 0;

@@ -38,4 +38,4 @@ const EVP_MD* md = EVP_sha256();
 
 // server connection info & utilities
 const string ADDRESS = "localhost";
-const string PORT = "9034";
+const int PORT = 9034;
