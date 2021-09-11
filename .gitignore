@@ -1,3 +1,5 @@
 .vscode/
 *.o
 bin/
+client/client
+.vscode/settings.json

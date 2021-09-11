@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <map>
+#include <ostream>
 #include <fcntl.h>
 #include <openssl/rand.h>
 #include "ClientElement.hpp"
@@ -207,8 +208,9 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 // WARNING: This operation also loads the related public key
                 printf("[HM1]: Setting username.\n");
                 user->SetUsername(username);
-                printf("[HM1]: Setting received Nonce.\n");
+                printf("[HM1]: Setting received Nonce %d.\n",nonce_user);
                 user->SetNonceReceived(nonce_user);
+                fflush(stdout);
             }else{
                 perror("first auth message: getdata");
                 free(data_buffer);
@@ -241,11 +243,13 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             long pem_size = user->GetToSendPubDHKeySize();
             printf("[HM1]: Pem_size: %ld\n", pem_size);
             // signature of received nonce and pem
-            unsigned char* pem_buffer;
+            unsigned char* pem_buffer = user->GetToSendPubDHKey();
+            // user->GetToSendPubDHKey(&pem_buffer);
 			unsigned char* pt = new unsigned char[pem_size+sizeof(int32_t)];
             int32_t na = user->GetNonceReceived();
             printf("[HM1]: Copying pem into plaintext buffer.\n");
 			memcpy(pt, pem_buffer, pem_size);
+            printf("[HM1]: Copying nonce into plaintext buffer.\n");
 			memcpy(pt+pem_size, &na, sizeof(int32_t));
             unsigned char* cl_sign;
 			unsigned int cl_sign_size;
@@ -272,13 +276,23 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             memcpy(buffer+cursor,pem_buffer,pem_size);
             cursor += pem_size;
             printf("[HM1]: signature size: %d.\n", cl_sign_size);
-            memcpy(&buffer+cursor,&cl_sign_size,sizeof(int32_t));
+            memcpy(buffer+cursor,&cl_sign_size,sizeof(int32_t));
             cursor += sizeof(int32_t);
             printf("[HM1]: CL. Fidati di nuovo.\n");
-            memcpy(&buffer+cursor,cl_sign,cl_sign_size);
+            memcpy(buffer+cursor,cl_sign,cl_sign_size);
             cursor += cl_sign_size;
+            for(int ieti = 0; ieti < cl_sign_size ; ieti++){
+		        cout << (int)(cl_sign[ieti]);
+                if(ieti==cl_sign_size-1)
+			        cout << endl;
+	        }
             printf("[HM1]: Server Cert.\n");
-            memcpy(&buffer+cursor, serv_cert_buffer, cert_size);
+            memcpy(buffer+cursor, serv_cert_buffer, cert_size);
+            for(int ieti = 0; ieti < cert_size ; ieti++){
+		        cout << (int)*(buffer+cursor+ieti);
+                if(ieti==cert_size-1)
+			        cout << endl;
+	        }
             cursor += cert_size;
 
             // and finally build the reply message and send it

@@ -64,6 +64,7 @@ class ClientElement
 		unsigned char* GetSessionKey();
 		unsigned char* GetSessionKey(int* len);
 		int GenerateKeysForUser();
+		unsigned char* GetToSendPubDHKey();
 		~ClientElement();
 
 };

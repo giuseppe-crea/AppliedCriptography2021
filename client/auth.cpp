@@ -22,7 +22,9 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	int32_t ret = first_m->SendUnencryptedMessage(sockfd);
 	if(ret == -1){
 		perror("AUTHENTICATION");
+		exit(-1);
 	}
+	cout << "CHECK 1 in auth" << endl;
 	free(buffer);
 	delete(first_m);
 
@@ -30,19 +32,26 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	//(negative to distinguish from encrytped message)
 	int32_t nbytes;
 	nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
-	if(nbytes != sizeof(int32_t) || buffer_bytes > 0)
+	if(nbytes != sizeof(int32_t) || buffer_bytes > 0){
 		perror("AUTHENTICATION");
-
+		exit(-1);
+	}
+	cout << "CHECK 2 in auth" << endl;
 	buffer = new unsigned char[-buffer_bytes];
+	cout << buffer_bytes << endl;
 	nbytes = recv(sockfd, buffer, -buffer_bytes, 0);
-	if(nbytes != buffer_bytes)
+	if(nbytes != -buffer_bytes){
 		perror("AUTHENTICATION");
-
+		exit(-1);
+	}
+	cout << "CHECK 3 in auth" << endl;
 	Message* second_m = new Message();
-	second_m->Unwrap_unencrypted_message(buffer, buffer_bytes);
-	if(second_m->GetOpCode() != second_auth_msg_code)
+	second_m->Unwrap_unencrypted_message(buffer, -buffer_bytes);
+	if(second_m->GetOpCode() != second_auth_msg_code){
 		perror("AUTHENTICATION");
-	
+		exit(-1);
+	}
+	cout << "CHECK 4 in auth" << endl;
 	//saves certificate from the server
 	unsigned char* sv_sign;
 	long sv_pem_size;
@@ -55,22 +64,39 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	X509* serv_cert = NULL;
 
 	free(buffer);
+	cout << "CHECK 5 in auth" << endl;
 	buffer = second_m->getData(&buffer_bytes);
 	long read_dim = 0; // counts the number of bytes read from message
 
 	memcpy(&ns, buffer, sizeof(int32_t));
 	read_dim += sizeof(int32_t);	
+	cout << "Nonce from server" << ns << endl;
 	memcpy(&sv_pem_size, buffer + read_dim, sizeof(long));	
 	read_dim += sizeof(long);
+	cout << "Server pem size: " << sv_pem_size << endl;
 	BIO_write(sv_pem, buffer + read_dim, sv_pem_size);
 	read_dim += sv_pem_size;
+	cout << "Server Pem read" << endl;
 	memcpy(&sign_size, buffer + read_dim, sizeof(int32_t));
 	read_dim += sizeof(int32_t);
+	cout << "Signature size: " << sign_size << endl;
 	sv_sign = (unsigned char*)malloc(sign_size);
 	memcpy(sv_sign, buffer + read_dim, sign_size);
 	read_dim += sign_size;
+	for(int ieti = 0; ieti < sign_size; ieti++){
+		cout << (int)sv_sign[ieti];
+		if(ieti==sign_size-1)
+			cout << endl;
+	}
+	cout << "Signature read" << endl;
 	BIO_write(serv_cert_pem_buffer, buffer + read_dim, buffer_bytes - read_dim);
+	cout << "Server cert read" << endl;
 	PEM_read_bio_X509(serv_cert_pem_buffer, &serv_cert, NULL, NULL);
+	for(int ieti = 0; ieti < buffer_bytes - read_dim; ieti++){
+		cout << (int)*(buffer + read_dim + ieti);
+		if(ieti==buffer_bytes-read_dim-1)
+			cout << endl;
+	}
 
 	delete(second_m);
 
@@ -85,7 +111,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 
 	if(X509_verify_cert(ctx)){ // verifies serv_cert based on the context previously created
 		EVP_PKEY* sv_pub_key = X509_get_pubkey(serv_cert);
-
+		cout << "CHECK 6 in auth" << endl;
 		//verifies the signature and generates a session key
 		if(verify_sign(sv_pub_key, sv_pem_buffer, na, sv_pem_dim, sv_sign, sign_size)){
 			//TODO: elliptic curve functions: dh key generation and session key derivation

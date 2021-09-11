@@ -58,8 +58,13 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 	char buffer[buffer_dim];
 	
 	//takes the data and the nonce that have been signed
-	memcpy((char*) data, buffer, data_dim);
-	memcpy((char*) &n, buffer, sizeof(int32_t));
+	memcpy(buffer, data, data_dim);
+	memcpy(buffer+data_dim, &n, sizeof(int32_t));
+
+	if(pub_key == NULL){
+		perror("Server public key not imported.");
+		exit(-1);
+	}
 
 	//actual signature verification
 	ret = EVP_VerifyUpdate(md_ctx, (char*)&buffer, buffer_dim);  

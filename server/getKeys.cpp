@@ -31,6 +31,8 @@ bool get_keys(string username, EVP_PKEY** cl_pub_key){
 
 	*cl_pub_key = PEM_read_PUBKEY(pem_cl_pubkey,NULL,NULL,NULL);
 
+	fclose(pem_cl_pubkey);
+
     if(!*cl_pub_key)
         return false;
 
