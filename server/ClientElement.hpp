@@ -1,13 +1,17 @@
 #ifndef CLIENTELEMENT_H
 #define CLIENTELEMENT_H
+#include <string.h>
+#include <string>
 #pragma once
 	
+using namespace std;
+
 class ClientElement  
 {
 	private:
 
-		std::string user_id;
-		std::string chat_partner_id;
+		string user_id;
+		string chat_partner_id;
 		unsigned char* sessionKey;
 		int32_t socket;
 		// Counter from is MANUALLY incremented before each handlemessage of ENCRYPTED messages only
@@ -30,18 +34,17 @@ class ClientElement
 		ClientElement();
 		void IncreaseCounterFrom();
 		void IncreaseCounterTo();
-		unsigned char* GetSessionKey();
 		bool CounterSizeCheck();
 		// SetUsername also loads the appropriate public key from file
-		int SetUsername(std::string username);
-		std::string GetUsername();
-		int SetPartnerName(std::string username);
-		std::string GetPartnerName();
-		int SetNonceReceived(int32_t nonce);
+		int SetUsername(string username);
+		string GetUsername();
+		void SetPartnerName(string username);
+		string GetPartnerName();
+		void SetNonceReceived(int32_t nonce);
 		int32_t GetNonceReceived();
-		int SetNonceSent(int32_t nonce);
+		void SetNonceSent(int32_t nonce);
 		int32_t GetNonceSent();
-		int StartChatSession(std::string PartnerID);
+		int StartChatSession(string PartnerID);
 		int EndChatSession();
 		int32_t GetCounterTo();
 		void SetCounterTo(int32_t cnt);
@@ -58,7 +61,8 @@ class ClientElement
 		long GetToSendPubDHKeySize();
 		long GetReceivedPubDHKeySize();
 		EVP_PKEY* GetPublicKey();
-		int SetSessionKey(unsigned char* key, int key_len);
+		void SetSessionKey(unsigned char* key, int key_len);
+		unsigned char* GetSessionKey();
 		unsigned char* GetSessionKey(int* len);
 		~ClientElement();
 

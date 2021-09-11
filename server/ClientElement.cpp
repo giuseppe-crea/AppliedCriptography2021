@@ -5,12 +5,6 @@
 #include <openssl/pem.h>
 #include "getKeys.cpp"
 
-	std::string user_id;
-    int32_t socket;
-    int32_t counter_from = 0;
-    int32_t  counter_to = 0;
-    bool isBusy = false;
-
 ClientElement::ClientElement()
 {
 	user_id = "";
@@ -26,7 +20,7 @@ bool ClientElement::CounterSizeCheck(){
     return(counter_to+1 == INT_MAX || counter_from+1 == INT_MAX);
 }
 
-int ClientElement::SetUsername(std::string username){
+int ClientElement::SetUsername(string username){
     this->user_id = username;
     if(!get_keys(username, &this->public_key)){
         string error_message = "Can't load public key for user: "+username;
@@ -36,19 +30,19 @@ int ClientElement::SetUsername(std::string username){
     return 0;
 }
 
-std::string ClientElement::GetUsername(){
+string ClientElement::GetUsername(){
     return this->user_id;
 }
 
-int ClientElement::SetPartnerName(std::string username){
+void ClientElement::SetPartnerName(string username){
     this->chat_partner_id = username;
 }
 
-std::string ClientElement::GetPartnerName(){
+string ClientElement::GetPartnerName(){
     return this->chat_partner_id;
 }
 
-int ClientElement::SetNonceReceived(int32_t nonce){
+void ClientElement::SetNonceReceived(int32_t nonce){
     this->nonce_received = nonce;
 }
 
@@ -56,12 +50,12 @@ int32_t ClientElement::GetNonceReceived(){
     return nonce_received;
 }
 
-int ClientElement::SetNonceReceived(int32_t nonce){
+void ClientElement::SetNonceSent(int32_t nonce){
     this->nonce_sent = nonce;
 }
 
-int32_t ClientElement::GetNonceReceived(){
-    return nonce_sent;
+int32_t ClientElement::GetNonceSent(){
+    return this->nonce_sent;
 }
 
 void ClientElement::IncreaseCounterFrom()
@@ -151,12 +145,16 @@ EVP_PKEY* ClientElement::GetPublicKey(){
     return this->public_key;
 }
 
-int ClientElement::SetSessionKey(unsigned char* key, int key_len){
+void ClientElement::SetSessionKey(unsigned char* key, int key_len){
     if(key != NULL){
         this->sessionKey = new unsigned char[key_len];
         memcpy(this->sessionKey, key, key_len);
         this->session_key_len = key_len;
     }
+}
+
+unsigned char* ClientElement::GetSessionKey(){
+    return this->sessionKey;
 }
 
 unsigned char* ClientElement::GetSessionKey(int* len){

@@ -2,6 +2,7 @@
 #include <openssl/x509_vfy.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include "ClientElement.cpp"
 
 using namespace std;
 // authentication between client and server
@@ -23,17 +24,17 @@ int GenerateKeysForUser(ClientElement* user){
     EVP_PKEY_CTX* kg_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
     EVP_PKEY* peer_dh_prvkey = NULL;
     EVP_PKEY_keygen_init(kg_ctx);
-    EVP_PKEY_keygen(kg_ctx,&peer_dh_prvkey);
+    int ret_pv = EVP_PKEY_keygen(kg_ctx,&peer_dh_prvkey);
     EVP_PKEY_CTX_free(kg_ctx);
 
     // save public key in pem format in a memory BIO
     BIO* peer_dh_pubkey_pem = BIO_new(BIO_s_mem());
     int ret_pb = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,peer_dh_prvkey);
-    // save pprivate key the same way
-    BIO* peer_dh_pubkey_pem = BIO_new(BIO_s_mem());
-    int ret_pv = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,peer_dh_prvkey);
+    // save private key the same way
+    // BIO* peer_dh_prvkey_pem = BIO_new(BIO_s_mem());
+    // int ret_pv = PEM_write_bio_PrivateKey(peer_dh_prvkey_pem,peer_dh_prvkey);
     // check for errors during serialization
-    if(ret_pb || ret_pb == 0){
+    if((ret_pb || ret_pv) == 0){
         string type = ret_pb == 0 ? "public" : "private";
         string error = "Error serializing my own "+type+" DH-K PEM for user "+ user->GetUsername()+".";
         perror(error.c_str());

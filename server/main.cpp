@@ -11,10 +11,9 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <map>
-#include <ClientElement.hpp>
 #include <openssl/rand.h>
-#include "Message.hpp"
-#include "OpCodes.h"
+#include "ClientElement.hpp"
+#include "Message.cpp"
 #include "auth.cpp"
 #include "../client/signature_utilities.cpp"
 
@@ -87,7 +86,9 @@ int peer_error(ClientElement* target, int opCode, bool isRealError){
     if(isRealError){
         string error_message = "Had a ["+to_string(opCode)+"] error for client " + target->GetUsername();
         perror(error_message.c_str());
+        return 1;
     }
+    return 0;
 }
 
 // @param
@@ -283,7 +284,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 memcpy(&cl_sign, data_buffer+ cursor, cl_sign_size);
 
                 // verify signature
-                if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceReceived(), pem_dim, cl_sign, cl_sign_size)){
+                if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceSent(), pem_dim, cl_sign, cl_sign_size)){
                     string error_message = "Signature verification for client "+user->GetUsername()+" failed.";
                     perror(error_message.c_str());
                     error = true;
@@ -537,6 +538,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
     free(data_buffer);
     if(error)
         return 1;
+    return 0;
 }  
 
 int main(void)

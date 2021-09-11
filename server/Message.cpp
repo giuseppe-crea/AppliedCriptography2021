@@ -3,8 +3,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "aes_base_support.cpp"
 #include "ClientElement.hpp"
+#include "aes_base_support.cpp"
 
 const int MAX_PAYLOAD_SIZE = 40000;
 const int32_t STATIC_POSTFIX = 28;
@@ -28,10 +28,10 @@ Message::~Message()
 
 int32_t Message::GenIV(){
     if(this->iv != NULL)
-        handleErrors();
+        return -1;
     this->iv = (unsigned char*)malloc(12*sizeof(unsigned char));
     if(this->iv == NULL)
-        handleErrors();
+        return -1;
     if(!RAND_bytes(this->iv, 12))
         return -1;
     return 0;
@@ -115,14 +115,14 @@ int32_t Message::Encode_message(unsigned char* key){
         cursor += this->data_dim;
     }
 
-    if(!this->SetCtLen(gcm_encrypt(pt, cursor, NULL, NULL, key, this->iv, 12, this->ct, this->ct_tag)))
+    if(!this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, this->ct, this->ct_tag)))
         return -1;
     return 0;
 }
 
 // when receiving an unencrypted message
 // sets opcode and data buffer in the Message object
-int32_t Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
+void Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
     int32_t cursor = 0;
     int32_t opCode;
     memcpy(&opCode, buffer, sizeof(int32_t));
@@ -154,9 +154,8 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 
     // decryption
     unsigned char* pt_buffer;
-    int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, NULL, tag_buffer, key, iv_buffer, 12, pt_buffer);
+    int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0){
-        handleErrors();
         return 1;
     }
     cursor = 0;
@@ -167,7 +166,6 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
     if(!this->setData(pt_buffer+cursor, dataLen-cursor)){
-        handleErrors();
         return 1;
     }
     return 0;
