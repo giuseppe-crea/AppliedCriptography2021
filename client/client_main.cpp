@@ -91,9 +91,10 @@ int main(){
 	fclose(fp_CA_cert);
 
 
-	if(!get_keys(cl_id,password,&sharedVariables->cl_pubkey,&sharedVariables->cl_prvkey))
+	if(!get_keys(cl_id,password,&sharedVariables->cl_pubkey,&sharedVariables->cl_prvkey)){
 		perror("INVALID_USER");
-
+		exit(-3);
+	}
 	cout << "User identified" << endl;
 
 	// connect to server
@@ -107,22 +108,26 @@ int main(){
 
 
 	serv_addr.sin_family = AF_INET;
-	//serv_addr.sin_addr.s_addr = inet_addr(server_address.c_str());
-	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-  	serv_addr.sin_port = htons(server_port);
-	// serv_addr.sin_port = htons(PORT);//atoi(PORT.c_str());
+	serv_addr.sin_port = htons(PORT);
+
+	if(inet_pton(AF_INET,"127.0.0.1", &serv_addr.sin_addr)<=0){
+		perror("Error in convertion of ip address.");
+		exit(-1);
+	};
+
 	cout << "Address is set" << endl;
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
 	if (sockfd < 0){
   		perror("ERROR opening socket");
-		exit(1);
+		exit(-1);
 	}
 
 	cout << "Socket FD initialized" << endl;
 
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
         perror("ERROR connecting");
-		exit(1);
+		exit(-1);
 	}
 
 	cout << "Connected" << endl;
