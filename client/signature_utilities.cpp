@@ -55,7 +55,7 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 	//verifies the signature
 	int buffer_dim = sizeof(int32_t)+data_dim;
 
-	char buffer[buffer_dim];
+	unsigned char* buffer = new unsigned char[buffer_dim];
 	
 	//takes the data and the nonce that have been signed
 	memcpy(buffer, data, data_dim);
@@ -63,6 +63,7 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 
 	if(pub_key == NULL){
 		perror("Server public key not imported.");
+		free(buffer);
 		exit(-1);
 	}
 
@@ -72,11 +73,13 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 	ret = EVP_VerifyFinal(md_ctx, sign, sign_dim, pub_key);
 	if(ret == -1){ // it is 0 if invalid signature, -1 if some other error, 1 if success.
 		cerr << "Error: EVP_VerifyFinal returned " << ret << " (invalid signature?)\n";
+		free(buffer);
 		exit(1);
 	}else if(ret == 0){
 		cerr << "Error: Invalid signature!\n";
+		free(buffer);
 		exit(1);
    }
-
+	free(buffer);
 	return true;
 }

@@ -120,7 +120,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	delete(second_m);
 
 	// extracts diffie hellmann server public key received in PEM format
-	sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
+	// sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
 	unsigned char* sv_pem_buffer;
 	long sv_pem_dim = BIO_get_mem_data(sv_pem,&sv_pem_buffer);
 
@@ -140,10 +140,11 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 		X509_STORE_CTX_free(ctx);
 		cout << "CHECK 6 in auth" << endl;
 		//verifies the signature and generates a session key
-		if(verify_sign(sv_pub_key, new_pem_buffer/*sv_pem_buffer*/, na, sv_pem_size/*sv_pem_dim*/, sv_sign, sign_size)){
+		if(verify_sign(sv_pub_key, sv_pem_buffer, na, sv_pem_dim, sv_sign, sign_size)){
 			//TODO: elliptic curve functions: dh key generation and session key derivation
 			// load elliptic curve parameters
-			EVP_PKEY* dh_params;
+			sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
+			EVP_PKEY* dh_params = NULL;
 
 			EVP_PKEY_CTX* pctx;
 			pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
