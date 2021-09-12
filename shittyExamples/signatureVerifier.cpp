@@ -47,13 +47,15 @@ int main(int argc, char const *argv[])
 
 	if(X509_verify_cert(ctx)){ // verifies serv_cert based on the context previously created
 		EVP_PKEY* sv_pub_key = X509_get_pubkey(new_server_cert);
+        /*
         unsigned char* printbuffer = new unsigned char[512];
         memcpy(printbuffer, sv_pub_key, 512);
-		for(int ieti = 0; ieti < 512; ieti++){
+        for(int ieti = 0; ieti < 512; ieti++){
 			cout << (int)printbuffer[ieti];
 			if(ieti == 511) 
 				cout << endl;
 		}
+        */
         EVP_PKEY* sv_prv_key;
         FILE* pem_sv_prvkey = fopen("../certificates/serv_prvkey.pem","r");
 	    sv_prv_key = PEM_read_PrivateKey(pem_sv_prvkey,NULL,NULL,NULL);
@@ -66,7 +68,12 @@ int main(int argc, char const *argv[])
         unsigned int sig_len;
         int ret1 = signature(sv_prv_key, pt, &signature_value, 9, &sig_len);
         unsigned char data[5] = "ciao";
-        int ret2 = verify_sign(sv_pub_key, data, madonna, 5, signature_value, sig_len);
+        unsigned char* signature_to_verify = (unsigned char*)calloc(sig_len, sizeof(unsigned char));
+        memcpy(signature_to_verify, signature_value, sig_len);
+        int ret3 = memcmp(signature_to_verify, signature_value, sig_len);
+        printf("sig_len = %d\n", sig_len);
+        printf("RET3 = %d\n", ret3);
+        int ret2 = verify_sign(sv_pub_key, data, madonna, 5, signature_to_verify, sig_len);
         printf("RET1 = %d\nRET2 = %d\n", ret1, ret2);
     }
 

@@ -4,7 +4,6 @@
 #include <openssl/evp.h>
 using namespace std;
 
-
 const int first_auth_msg_code = 290;
 const int second_auth_msg_code = 291;
 const int final_auth_msg_code = 292;

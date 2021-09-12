@@ -6,7 +6,7 @@
 class Message  
 {
 	private:
-		unsigned char* iv;
+		unsigned char iv[12];
 		unsigned char* data;
 		int32_t data_dim;
 		int32_t counter;
@@ -26,7 +26,7 @@ class Message
 		int32_t GetOpCode();
 		unsigned char* ct; // encryption E(op_code, counter, data),
 		int32_t ct_len;
-		unsigned char* ct_tag; //long long should have size 16 byte, 128 bit
+		unsigned char ct_tag[16]; //long long should have size 16 byte, 128 bit
 		unsigned char* getData(int* datadim);
 		int32_t setData(void* buffer, int32_t buffer_dim);
 		int32_t SendMessage(int socketID, unsigned int* counter);

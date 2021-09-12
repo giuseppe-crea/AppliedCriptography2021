@@ -12,18 +12,18 @@ void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_di
 
 	// prepare data
 
-    if(!m->SetOpCode(opcode))
+    if(m->SetOpCode(opcode) != 0)
         perror("OPCODE_ERROR");
-    if(!m->SetCounter(*counterAS))
+    if(m->SetCounter(*counterAS) != 0)
         perror("COUNTER_ERROR");
     if(data!=NULL) 
 	    if(!m->setData(data,data_dim))
             perror("DATA_ERROR");
 
     // encrypts and sends  the message
-    if(!m->Encode_message(sv_key))
+    if(m->Encode_message(sv_key) != 0)
         perror("ENCODING_ERROR");
-    if(!m->SendMessage(sockfd,counterAS))
+    if(m->SendMessage(sockfd,counterAS) != 0)
         perror("SENDING_ERROR");
 
 	struct_mutex->unlock();
@@ -37,16 +37,16 @@ void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* struct
 
 	// prepare data
 
-    if(!m_to_peer->SetOpCode(peer_message_code))
+    if(m_to_peer->SetOpCode(peer_message_code)!= 0)
         perror("OPCODE_ERROR");
-    if(!m_to_peer->SetCounter(*counterAB))
+    if(m_to_peer->SetCounter(*counterAB)!= 0)
         perror("COUNTER_ERROR");
     if(data!=NULL) 
-	    if(!m_to_peer->setData(data,data_dim))
+	    if(m_to_peer->setData(data,data_dim)!= 0)
             perror("DATA_ERROR");
     
     // first encryption with peer key 
-    if(!m_to_peer->Encode_message(peer_key))
+    if(m_to_peer->Encode_message(peer_key)!= 0)
         perror("ENCODING_ERROR");
 
     int32_t buffer_bytes = sizeof(int32_t) + m_to_peer->ct_len + STATIC_POSTFIX;

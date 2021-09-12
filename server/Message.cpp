@@ -6,32 +6,23 @@
 #include "ClientElement.cpp"
 #include "aes_base_support.cpp"
 
-const int MAX_PAYLOAD_SIZE = 40000;
 const int32_t STATIC_POSTFIX = 28;
+const int MAX_PAYLOAD_SIZE = 40000;
 	
 Message::Message()
 {
-	this->iv = NULL;
     this->data = NULL;
     this->ct = NULL;
-    this->ct_tag = NULL;
     this->data_dim = 0;
 }
 	
 Message::~Message()
 {
-	free(this->iv);
     free(this->data);
     free(this->ct);
-    free(this->ct_tag);
 }
 
 int32_t Message::GenIV(){
-    if(this->iv != NULL)
-        return -1;
-    this->iv = (unsigned char*)malloc(12*sizeof(unsigned char));
-    if(this->iv == NULL)
-        return -1;
     if(!RAND_bytes(this->iv, 12))
         return -1;
     return 0;
@@ -108,7 +99,7 @@ int32_t Message::Encode_message(unsigned char* key){
     this->GenIV();
     // prepare data
     int pt_dim = 2*sizeof(int32_t)+this->data_dim;
-    unsigned char* pt = (unsigned char *) malloc(pt_dim*sizeof(unsigned char));
+    unsigned char* pt = (unsigned char *) calloc(pt_dim,sizeof(unsigned char));
     memcpy(pt, &this->op_code, sizeof(int32_t));
     cursor += sizeof(int32_t);
     memcpy(pt+cursor, &this->counter, sizeof(int32_t));
@@ -118,8 +109,12 @@ int32_t Message::Encode_message(unsigned char* key){
         cursor += this->data_dim;
     }
 
-    if(!this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, this->ct, this->ct_tag)))
+    unsigned char* tmpCiphertext = (unsigned char*)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
+    if(this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, tmpCiphertext, this->ct_tag)))
         return -1;
+    this->ct = (unsigned char*)calloc(this->ct_len, sizeof(unsigned char));
+    memcpy(this->ct, tmpCiphertext, this->ct_len);
+    free(tmpCiphertext);
     return 0;
 }
 
@@ -149,11 +144,12 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     memcpy(data_buffer, buffer+cursor, data_size_buffer);
     cursor += data_size_buffer;
     unsigned char* iv_buffer = (unsigned char *)malloc(12);
-    memcpy(iv_buffer, buffer+cursor, 12);
-    cursor += 12;
     unsigned char* tag_buffer = (unsigned char *)malloc(16);
     memcpy(tag_buffer, buffer+cursor, 16);
     cursor += 16;
+    memcpy(iv_buffer, buffer+cursor, 12);
+    cursor += 12;
+
 
     // decryption
     unsigned char* pt_buffer;

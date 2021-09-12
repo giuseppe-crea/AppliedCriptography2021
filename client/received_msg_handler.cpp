@@ -28,15 +28,44 @@ void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variabl
         
         // gets message from server
         int32_t nbytes;
-        unsigned char* buffer;
+        unsigned char* buffer = new unsigned char[4];
 	    int32_t buffer_bytes;
         // reads first 4 bytes to get message length
-	    nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
+        int total = 0;
+        int r = 0;
+        int msg_len_buf = 0;
+	    while(total < sizeof(int32_t)) {
+            int bytes = sizeof(int32_t) - total;
+            r = recv(sockfd, buffer+total, bytes, 0);
+            if (r < 0) {
+                /* handle this! */
+                fprintf(stderr, "PANIC! %d", r);
+                break;
+            }
+            total += r;
+        }
+        memcpy(&buffer_bytes, buffer, sizeof(int32_t));
+        free(buffer);
+        /*
+        nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
         if(nbytes != sizeof(int32_t) || buffer_bytes < 0)
 		    perror("RECEIVED_MESSAGE");
+        */
         // reads rest of the message 
-        buffer = new unsigned char[buffer_bytes];
-        nbytes = recv(sockfd, buffer, buffer_bytes, 0);
+        buffer =(unsigned char*)calloc(buffer_bytes, sizeof(unsigned char));
+        total = 0;
+        while(total < buffer_bytes) {
+            int bytes = buffer_bytes - total;
+            r = recv(sockfd, buffer+total, bytes, 0);
+            if (r <= 0) {
+                /* handle this! */
+                // fprintf(stderror, "PANIC");
+                break;
+            }
+            total += r;
+        }
+        
+        // nbytes = recv(sockfd, buffer, buffer_bytes, 0);
 	    if(nbytes != buffer_bytes)
 		    perror("RECEIVED_MESSAGE");
 

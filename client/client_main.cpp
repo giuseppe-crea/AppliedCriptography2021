@@ -136,6 +136,11 @@ int main(){
 	//authentication of the client
 	auth(cl_id, sharedVariables->cl_prvkey, sharedVariables->cl_pubkey, sockfd, &sharedVariables->sv_session_key, store);
 
+	unsigned char* s_key = sharedVariables->sv_session_key;
+	for (int ieti = 0; ieti < 32; ieti++){
+		printf("%d", (int)s_key[ieti]);
+	} printf("\n");
+	
 	//initialization of input buffer
 	string input_buffer = "";
 
@@ -147,11 +152,11 @@ int main(){
 		cin >> input_buffer;
 		//gets the first word of input
 		string first_word = input_buffer.substr(0,input_buffer.find(' '));
-		
+		cout << first_word << endl;
 		//checks if the first word is a command
-		if (!sharedVariables->chatting & first_word.compare(list_request_cmd))
+		if (!sharedVariables->chatting && strcmp(first_word.c_str(), list_request_cmd.c_str())==0)
 			send_to_sv(list_request_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
-		else if (!sharedVariables->chatting & first_word.compare(chat_request_cmd)){
+		else if (!sharedVariables->chatting && strcmp(first_word.c_str(), chat_request_cmd.c_str())==0){
 			if(input_buffer.size() < 6)
 				perror("You have to insert an id for a user.");
 			else{
@@ -163,12 +168,12 @@ int main(){
 				send_to_sv(chat_request_code, sockfd, (unsigned char*)recipient_id.c_str(),recipient_id.size()+1,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
 			}
 		}
-		else if (first_word.compare(logout_cmd)){
+		else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){
 			send_to_sv(logout_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
 			close(sockfd);
 			exit(-2);
 		}
-		else if (sharedVariables->chatting & first_word.compare(end_chat_cmd)){
+		else if (sharedVariables->chatting && strcmp(first_word.c_str(), end_chat_cmd.c_str())==0){
 			send_to_sv(end_chat_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
 			struct_mutex.lock();
 			sharedVariables->chatting = false;

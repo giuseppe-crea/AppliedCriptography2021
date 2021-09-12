@@ -31,15 +31,29 @@ std::map<std::string, ClientElement*> connectedClientsByUsername;
 int serialize_active_clients(unsigned char** buffer){
     std::map<std::string, ClientElement*>::iterator it;
     int cursor = 0;
+    unsigned char* tmpBuffer = (unsigned char*)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
     for (it = connectedClientsByUsername.begin(); it != connectedClientsByUsername.end(); it++)
     {
-        string username = it->second->GetUsername();
-        int32_t len_of_username = username.length();
-        memcpy(&buffer+cursor, &len_of_username, sizeof(int32_t));
-        cursor += sizeof(int32_t);
-        memcpy(&buffer+cursor, username.c_str(), len_of_username);
-        cursor += len_of_username;
+        if((strcmp(it->second->GetPartnerName().c_str(),"")==0) || cursor < MAX_PAYLOAD_SIZE){
+            string username = it->second->GetUsername();
+            int32_t len_of_username = username.length()+1;
+            if(cursor+len_of_username+sizeof(int32_t) < MAX_PAYLOAD_SIZE){
+                memcpy(tmpBuffer+cursor, &len_of_username, sizeof(int32_t));
+                cursor += sizeof(int32_t);
+                memcpy(tmpBuffer+cursor, username.c_str(), len_of_username);
+                cursor += len_of_username;
+            }else{
+                *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
+                memcpy(*buffer, tmpBuffer, cursor);
+                return cursor;
+            }
+        }else
+            *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
+            memcpy(*buffer, tmpBuffer, cursor);
+            return cursor;
     }
+    *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
+    memcpy(*buffer, tmpBuffer, cursor);
     return cursor;
 }
 
@@ -183,6 +197,7 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
         free(reply);
         return 1;
     }
+    printf("The message's OP Code is: %d\n",message->GetOpCode());
     switch(message->GetOpCode()) {
         case first_auth_msg_code:{
             // very first message of an authentication procedure
@@ -338,14 +353,34 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 long pem_dim;
                 unsigned int cl_sign_size;
                 memcpy(&pem_dim, data_buffer, sizeof(long));
+                cout << "[HM2] Size of pem_dim: " << pem_dim << endl;
                 cursor += sizeof(long);
                 unsigned char* buffer = new unsigned char[pem_dim];
-                memcpy(&buffer, data_buffer+cursor, pem_dim);
+                memcpy(buffer, data_buffer+cursor, pem_dim);
+                cout << "[HM2] Content of buffer we write from:" << endl;
+                for(int ieti = 0; ieti < pem_dim ; ieti++){
+                    cout << (int)(data_buffer[cursor+ieti]);
+                    if(ieti==pem_dim-1)
+                        cout << endl;
+	            }
+                cout << "[HM2] Content of buffer we wrote to:" << endl;
+                for(int ieti = 0; ieti < pem_dim ; ieti++){
+                    cout << (int)(buffer[ieti]);
+                    if(ieti==pem_dim-1)
+                        cout << endl;
+	            }      
                 cursor += pem_dim;
                 memcpy(&cl_sign_size, data_buffer+ cursor, sizeof(unsigned int));
+                cout << "[HM2] Size of signature from client: " << cl_sign_size << endl;
                 cursor += sizeof(unsigned int);
                 unsigned char* cl_sign = new unsigned char[cl_sign_size];
-                memcpy(&cl_sign, data_buffer+ cursor, cl_sign_size);
+                memcpy(cl_sign, data_buffer+ cursor, cl_sign_size);
+                cout << "[HM2] Signature from client: " << endl;
+                for(int ieti = 0; ieti < cl_sign_size ; ieti++){
+                    cout << (int)(buffer[cursor+ieti]);
+                    if(ieti==cl_sign_size-1)
+                        cout << endl;
+	            }
 
                 // verify signature
                 if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceSent(), pem_dim, cl_sign, cl_sign_size)){
@@ -356,10 +391,12 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 if(!error){
                     // run key derivation on this data
                     // session key derivation
+                    BIO* peer_dh_pub_key_bio = BIO_new(BIO_s_mem());
+                    BIO_write(peer_dh_pub_key_bio, buffer, pem_dim);
                     EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(user->GetPrivateDHKey(), NULL);
                     EVP_PKEY_derive_init(kd_ctx);
                     EVP_PKEY* peer_dh_pubkey = NULL;
-                    peer_dh_pubkey = PEM_read_bio_PUBKEY(user->GetPeerPublicDHKey(),NULL,NULL,NULL);
+                    peer_dh_pubkey = PEM_read_bio_PUBKEY(peer_dh_pub_key_bio,NULL,NULL,NULL);
                     int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
 
                     if(ret == 0){
@@ -400,6 +437,11 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 free(buffer);
                 free(cl_sign);
             }
+            printf("Client %s successfully completed the handshake process. This is their session key:\n", user->GetUsername().c_str());
+            unsigned char* s_key = user->GetSessionKey();
+            for (int ieti = 0; ieti < 32; ieti++){
+                printf("%d", (int)s_key[ieti]);
+            } printf("\n");
         break;
         }
         case chat_request_code:{
@@ -574,9 +616,12 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
                 target->SetPartnerName("");
                 user->SetPartnerName("");
             }
+            if(error == false)
+                printf("Client %s has requested to end chat with their partner.\n", user->GetUsername().c_str());
         break;
         }
         case logout_code:{
+            printf("Client %s successfully booted.\n", user->GetUsername().c_str());
             force_quit_socket(socket, closed_chat_code, false);
         break;
         }
@@ -596,6 +641,8 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             else
                 error = true;
             free(reply);
+            if(error == false)
+                printf("Client %s has requested and received a list of available users.\n", user->GetUsername().c_str());
         break;
         }
     }
