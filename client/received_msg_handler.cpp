@@ -113,7 +113,7 @@ void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variabl
                 break;
 
                 case list_code:
-                list(data);
+                list(data,data_dim);
                 break;
 
                 case peer_message_code:

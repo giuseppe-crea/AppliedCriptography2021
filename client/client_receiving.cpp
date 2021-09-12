@@ -373,9 +373,25 @@ void forced_logout(int sockfd){
 };
 
 // function that handles received list of available users from server
-void list(unsigned char* data){
+void list(unsigned char* data, int data_dim){
+    if(data_dim == 0){
+        printf("Not available users.\n");
+        return;
+    }
+    printf("Available users:\n");
+    int cursor = 0;
     //prints out the list of available users received from server
-    cout << data << endl;
+    while(cursor < data_dim){
+        int32_t username_length;
+        unsigned char* buffer;
+        memcpy(&username_length,data+cursor,sizeof(int32_t));
+        cursor+=sizeof(int32_t);
+        buffer = (unsigned char*)calloc(username_length,sizeof(unsigned char));
+        memcpy(buffer,data+cursor,username_length);
+        cursor+=username_length;
+        cout << buffer << endl;
+        free(buffer);
+    }
 };
 
 // function that handles a message receieved from peer
