@@ -14,6 +14,7 @@
 #include <ostream>
 #include <fcntl.h>
 #include <openssl/rand.h>
+#include <filesystem>
 #include "ClientElement.hpp"
 #include "Message.cpp"
 #include "../client/signature_utilities.cpp"
@@ -264,7 +265,8 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             printf("[HM1]: cert size: %ld.\n", cert_size);
             // put it all together
             printf("[HM1]: Writing it all to buffer.\n");
-            unsigned char* buffer = new unsigned char[(2*sizeof(int32_t))+sizeof(long)+pem_size+cl_sign_size+cert_size];
+            int buffer_temp_size = (2*sizeof(int32_t))+sizeof(long)+pem_size+cl_sign_size+cert_size;
+            unsigned char* buffer = new unsigned char[buffer_temp_size];
             int cursor = 0;
             printf("[HM1]: NS: %d.\n", ns);
             memcpy(buffer,&ns,sizeof(int32_t));
@@ -272,9 +274,21 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             printf("[HM1]: Pem_size: %ld\n", pem_size);
             memcpy(buffer+cursor,&pem_size,sizeof(long));
             cursor += sizeof(long);
-            printf("[HM1]: pem_buffer: fidati.\n");
-            memcpy(buffer+cursor,pem_buffer,pem_size);
+            printf("[HM1]: pem_buffer: \n");
+            memcpy(buffer+cursor, pem_buffer, pem_size);
             cursor += pem_size;
+            for(int ieti = 0; ieti < pem_size ; ieti++){
+		        cout << (int)(buffer[12+ieti]);
+                if(ieti==pem_size-1)
+			        cout << endl;
+	        }
+            // TEMP
+            BIO* sv_pem = BIO_new(BIO_s_mem());
+            BIO_write(sv_pem, buffer + 12, pem_size);
+            EVP_PKEY* sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
+            unsigned char* sv_pem_buffer;
+            long sv_pem_dim = BIO_get_mem_data(sv_pem,&sv_pem_buffer);
+            // /TEMP
             printf("[HM1]: signature size: %d.\n", cl_sign_size);
             memcpy(buffer+cursor,&cl_sign_size,sizeof(int32_t));
             cursor += sizeof(int32_t);
@@ -601,7 +615,7 @@ in_port_t get_in_port(struct sockaddr *sa)
 
 int main(void)
 { 
-    
+    cout << "Main." << endl;
     fd_set read_fds;  // temp file descriptor list for select()
     int fdmax;        // maximum file descriptor number
 

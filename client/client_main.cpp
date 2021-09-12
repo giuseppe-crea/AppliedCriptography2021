@@ -67,15 +67,15 @@ int main(){
 
 
 	// identification of user
-	string cl_id;
-	string password;
-	int server_port;
-	cout << "Who are you?" << endl;
-	cin >> cl_id;
-	cout << "Please insert password" << endl;
-	cin >> password;
-	cout << "Please insert server port" << endl;
-	cin >> server_port;
+	string cl_id = "alice";
+	string password = "alice";
+	int server_port = 9034;
+	//cout << "Who are you?" << endl;
+	//cin >> cl_id;
+	//cout << "Please insert password" << endl;
+	//cin >> password;
+	//cout << "Please insert server port" << endl;
+	//cin >> server_port;
 	//cout << "Enter the server's address:" << endl;
 	//cin >> server_address;
 

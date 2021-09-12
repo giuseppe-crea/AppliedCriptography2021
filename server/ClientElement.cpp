@@ -102,7 +102,7 @@ BIO* ClientElement::GetOurPublicDHKey(){
 
 int ClientElement::GenerateKeysForUser(){
     // declare variables for key and context
-    EVP_PKEY* dh_params;
+    EVP_PKEY* dh_params = NULL;
     EVP_PKEY_CTX* pctx;
 
     

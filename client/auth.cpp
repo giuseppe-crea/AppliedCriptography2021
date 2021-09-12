@@ -9,6 +9,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	//generates random nonce to be sent
 	int32_t na;
 	RAND_bytes((unsigned char*)&na, sizeof(int32_t));
+	printf("My nonce to be sent is: %d\n", na);
 	//creates first message for authentication
 	Message* first_m = new Message();
 	unsigned char* buffer;
@@ -56,6 +57,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	unsigned char* sv_sign;
 	long sv_pem_size;
 	BIO* sv_pem = BIO_new(BIO_s_mem());
+	// unsigned char* sv_pem;
 	BIO* serv_cert_pem_buffer = BIO_new(BIO_s_mem());
 	EVP_PKEY* sv_dh_pubkey = NULL;
 	int ns;
@@ -75,8 +77,21 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	read_dim += sizeof(long);
 	cout << "Server pem size: " << sv_pem_size << endl;
 	BIO_write(sv_pem, buffer + read_dim, sv_pem_size);
-	read_dim += sv_pem_size;
+	unsigned char* new_pem_buffer = new unsigned char[sv_pem_size];
+	memcpy(new_pem_buffer, buffer+read_dim, sv_pem_size);
 	cout << "Server Pem read" << endl;
+	for(int ieti = 0; ieti < sv_pem_size ; ieti++){
+		cout << (int)(buffer[read_dim+ieti]);
+		if(ieti==sv_pem_size-1)
+			cout << endl;
+	}
+	cout << "New Pem buffer" << endl;
+	for(int ieti = 0; ieti < sv_pem_size ; ieti++){
+		cout << (int)(new_pem_buffer[ieti]);
+		if(ieti==sv_pem_size-1)
+			cout << endl;
+	}
+	read_dim += sv_pem_size;
 	memcpy(&sign_size, buffer + read_dim, sizeof(int32_t));
 	read_dim += sizeof(int32_t);
 	cout << "Signature size: " << sign_size << endl;
@@ -91,9 +106,13 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	cout << "Signature read" << endl;
 	BIO_write(serv_cert_pem_buffer, buffer + read_dim, buffer_bytes - read_dim);
 	cout << "Server cert read" << endl;
-	PEM_read_bio_X509(serv_cert_pem_buffer, &serv_cert, NULL, NULL);
+	serv_cert = PEM_read_bio_X509(serv_cert_pem_buffer, NULL, 0, NULL);
+	unsigned char* printbuffer;
+	long len_bio_print = BIO_get_mem_data(serv_cert_pem_buffer, &printbuffer);
+	cout << "Bytes in server_cert_pem_buffer" << endl;
+	printf("len_bio_print: %ld, buffer_bytes - read_dim: %ld\n",len_bio_print, buffer_bytes - read_dim);
 	for(int ieti = 0; ieti < buffer_bytes - read_dim; ieti++){
-		cout << (int)*(buffer + read_dim + ieti);
+		cout << (int)printbuffer[ieti];
 		if(ieti==buffer_bytes-read_dim-1)
 			cout << endl;
 	}
@@ -111,9 +130,17 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 
 	if(X509_verify_cert(ctx)){ // verifies serv_cert based on the context previously created
 		EVP_PKEY* sv_pub_key = X509_get_pubkey(serv_cert);
+		unsigned char* printbuffer = new unsigned char[512];
+		memcpy(printbuffer, sv_pub_key, 512);
+		for(int ieti = 0; ieti < 512; ieti++){
+			cout << (int)printbuffer[ieti];
+			if(ieti == 511) 
+				cout << endl;
+		}
+		X509_STORE_CTX_free(ctx);
 		cout << "CHECK 6 in auth" << endl;
 		//verifies the signature and generates a session key
-		if(verify_sign(sv_pub_key, sv_pem_buffer, na, sv_pem_dim, sv_sign, sign_size)){
+		if(verify_sign(sv_pub_key, new_pem_buffer/*sv_pem_buffer*/, na, sv_pem_size/*sv_pem_dim*/, sv_sign, sign_size)){
 			//TODO: elliptic curve functions: dh key generation and session key derivation
 			// load elliptic curve parameters
 			EVP_PKEY* dh_params;

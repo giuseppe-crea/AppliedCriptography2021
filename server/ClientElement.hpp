@@ -26,6 +26,7 @@ class ClientElement
 		unsigned char* pub_dh_key_to_send;
 		BIO* peer_dh_pubkey_pem;
 		BIO* pub_dh_key_received;
+		EVP_PKEY* pub_dh_key;
 		EVP_PKEY* pri_dh_key;
 		EVP_PKEY* public_key;
 		bool isBusy = false;
