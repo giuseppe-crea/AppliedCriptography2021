@@ -152,7 +152,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     memcpy(&counter, pt_buffer+cursor, sizeof(int32_t));
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
-    if(!this->setData(pt_buffer+cursor, dataLen-cursor))
+    if(this->setData(pt_buffer+cursor, dataLen-cursor)!=0)
         perror("Error in setting data");
     
     return 0;
@@ -162,6 +162,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 int32_t Message::SendMessage(int socketID, unsigned int* counter){
     int32_t cursor = 0;
     int32_t totalSize = this->ct_len + STATIC_POSTFIX;
+    unsigned int c = *counter;
     // init a buffer for the data
     unsigned char* buffer = (unsigned char *)malloc(sizeof(int32_t)+16+12+this->ct_len);
     // copy size of ciphertext
@@ -177,7 +178,9 @@ int32_t Message::SendMessage(int socketID, unsigned int* counter){
     memcpy(buffer+cursor, this->iv, 12);
     cursor += 12;
     if(send(socketID, buffer, cursor, 0)){
-        *counter++;
+        c++; 
+        *counter = c;
+        printf("%d\n", *counter);
         return 0;
     }else 
         return -1;

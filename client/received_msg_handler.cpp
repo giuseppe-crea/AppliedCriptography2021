@@ -18,11 +18,11 @@ struct shared_variables{
 
 
 void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variables* sharedVariables){
-
-    sharedVariables->counterAS;
-
     EVP_PKEY* peer_public_key;
     EVP_PKEY* cl_dh_prvkey;
+
+    unsigned char SV_session_key[32];
+    memcpy(SV_session_key, sharedVariables->sv_session_key, 32);
 
     while(true){
         
@@ -70,7 +70,7 @@ void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variabl
 		    perror("RECEIVED_MESSAGE");
 
         Message* rcv_msg = new Message();
-        rcv_msg->Decode_message(buffer, buffer_bytes, sharedVariables->sv_session_key);
+        rcv_msg->Decode_message(buffer, buffer_bytes, SV_session_key);
         int data_dim;
         unsigned char* data = rcv_msg->getData(&data_dim);
         //reads the counter in the message and checks it's the same as counterS of the messages received from server
@@ -78,12 +78,13 @@ void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variabl
             //adds message count to the ones received from the server
             sharedVariables->counterSA++;
             //checks message header to choose which function to call based on the type of message received
+            cout << "Received Message with OP Code: " << rcv_msg->GetOpCode() << endl;
             switch(rcv_msg->GetOpCode()){
                 case chat_request_received_code:
-                chat_request_received(data, sockfd, sharedVariables->sv_session_key, &sharedVariables->counterAS, struct_mutex);
+                chat_request_received(data, sockfd, SV_session_key, &sharedVariables->counterAS, struct_mutex);
                 break;
                 case chat_request_accept_code: // from server message 4 to alice
-                chat_request_accepted(data, &sharedVariables->chatting,&sharedVariables->na, &peer_public_key,sharedVariables->sv_session_key, sockfd,&sharedVariables->counterAS, struct_mutex);
+                chat_request_accepted(data, &sharedVariables->chatting,&sharedVariables->na, &peer_public_key,SV_session_key, sockfd,&sharedVariables->counterAS, struct_mutex);
                 break;
                 case chat_request_denied_code:
                 chat_request_denied();
@@ -93,11 +94,11 @@ void received_msg_handler(int sockfd, mutex* struct_mutex, struct shared_variabl
                 break;
 
                 case nonce_msg_code: // receiving 6
-                nonce_msg(data, sharedVariables->sv_session_key, &cl_dh_prvkey, &sharedVariables->na, sharedVariables->cl_prvkey, sockfd, &sharedVariables->counterAS, struct_mutex);
+                nonce_msg(data, SV_session_key, &cl_dh_prvkey, &sharedVariables->na, sharedVariables->cl_prvkey, sockfd, &sharedVariables->counterAS, struct_mutex);
                 break;
 
                 case first_key_negotiation_code: // receiving 8
-                first_key_negotiation(data, sharedVariables->sv_session_key, &sharedVariables->peer_session_key, sharedVariables->na, sharedVariables->cl_prvkey, peer_public_key, sockfd, &sharedVariables->counterAS, struct_mutex);
+                first_key_negotiation(data, SV_session_key, &sharedVariables->peer_session_key, sharedVariables->na, sharedVariables->cl_prvkey, peer_public_key, sockfd, &sharedVariables->counterAS, struct_mutex);
                 break;
 
                 case second_key_negotiation_code: // receiving 10

@@ -6,7 +6,7 @@
 void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_dim,mutex* struct_mutex, unsigned int* counterAS,unsigned char* sv_key){
 	// sending message, critical section
 
-	struct_mutex->lock();
+	//struct_mutex->lock();
 
     Message* m = new Message();
 
@@ -26,7 +26,7 @@ void send_to_sv(int32_t opcode, int sockfd, unsigned char* data, int32_t data_di
     if(m->SendMessage(sockfd,counterAS) != 0)
         perror("SENDING_ERROR");
 
-	struct_mutex->unlock();
+	//struct_mutex->unlock();
 }
 
 // function that sends message to peer

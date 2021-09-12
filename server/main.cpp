@@ -820,6 +820,7 @@ int main(void)
                         ClientElement *newClient = new ClientElement();
                         // add it to the client-socket map
                         connectedClientsBySocket.insert(std::pair<int, ClientElement*>(newfd, newClient));
+                        newClient->SetSocketID(newfd);
                     }
                 } else {
                     cout << "Not the listener!" << endl;

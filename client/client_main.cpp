@@ -135,6 +135,8 @@ int main(){
 	
 	//authentication of the client
 	auth(cl_id, sharedVariables->cl_prvkey, sharedVariables->cl_pubkey, sockfd, &sharedVariables->sv_session_key, store);
+	unsigned char SV_session_key[32];
+    memcpy(SV_session_key, sharedVariables->sv_session_key, 32);
 
 	unsigned char* s_key = sharedVariables->sv_session_key;
 	for (int ieti = 0; ieti < 32; ieti++){
@@ -155,7 +157,7 @@ int main(){
 		cout << first_word << endl;
 		//checks if the first word is a command
 		if (!sharedVariables->chatting && strcmp(first_word.c_str(), list_request_cmd.c_str())==0)
-			send_to_sv(list_request_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS,sharedVariables->sv_session_key);
+			send_to_sv(list_request_code, sockfd, NULL, 0,&struct_mutex,&sharedVariables->counterAS, SV_session_key);
 		else if (!sharedVariables->chatting && strcmp(first_word.c_str(), chat_request_cmd.c_str())==0){
 			if(input_buffer.size() < 6)
 				perror("You have to insert an id for a user.");
