@@ -47,10 +47,7 @@ int serialize_active_clients(unsigned char** buffer){
                 memcpy(*buffer, tmpBuffer, cursor);
                 return cursor;
             }
-        }else
-            *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
-            memcpy(*buffer, tmpBuffer, cursor);
-            return cursor;
+        }
     }
     *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
     memcpy(*buffer, tmpBuffer, cursor);
