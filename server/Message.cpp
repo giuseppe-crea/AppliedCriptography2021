@@ -193,7 +193,7 @@ int32_t Message::SendMessage(unsigned char** buffer){
         // copy IV
         memcpy(buffer+cursor, this->iv, 12);
         cursor += 12;
-        cout << "Sending this many bytes of payload total: " << totalSize << endl;
+        // cout << "Sending this many bytes of payload total: " << totalSize << endl;
     }else{
         // unencrypted message
         int32_t message_dim = -(sizeof(int32_t)+this->data_dim);

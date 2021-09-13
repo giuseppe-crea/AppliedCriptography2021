@@ -34,6 +34,9 @@ class ClientElement
 
 	public:
 
+		unsigned char* unsent_buffer;
+		long unsent_bytes;
+		long current_sending_byte;
 		bool isBusy = false;
 		ClientElement();
 		void IncreaseCounterFrom();

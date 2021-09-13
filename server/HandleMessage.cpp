@@ -125,45 +125,53 @@ int send_to_peer(ClientElement* user)
   size_t len_to_send;
   ssize_t sent_count;
   size_t sent_total = 0;
-  while(user->Size_pending_messages() > 0) {
-    // Messages are present in send queue
-    Message* to_send = user->Dequeue_message();
-    unsigned char *send_buffer;
-    len_to_send = to_send->SendMessage(&send_buffer);
-    do{
-      sent_total = 0;
-      // Count bytes to send.
-      
-      if (len_to_send > MAX_PAYLOAD_SIZE)
-        len_to_send = MAX_PAYLOAD_SIZE;
-      sent_count = send(user->GetSocketID(), send_buffer+sent_total, len_to_send, 0);
-      if (sent_count < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          printf("peer is not ready right now, try again later.\n");
-        }
-        else {
-          perror("send() from peer error");
-          return -1;
-        }
-      }
-      else if (sent_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+  do {
+    // If sending message has completely sent and there are messages in queue, why not send them?
+    if (user->current_sending_byte < 0 || user->current_sending_byte >= user->unsent_bytes) {
+      // unsent_buffer was successfully sent, let's free it just to be sure
+      free(user->unsent_buffer);
+      // then we can look for messages in the send queue
+      Message* to_send = user->Dequeue_message();
+      if (to_send == NULL) {
+        user->current_sending_byte = -1;
+        // nothing left to send
         break;
       }
-      else if (sent_count == 0) {
-        // TODO: This is an issue. This assumes all the messages are serialized as a constant stream
-        // but this is not the case in our situation
-        // this also assumes we have a reference to how much of that stream has been sent
-        // which can be recovered through calls of this function
-        // that could be implemented inside ClientElement.
-        printf("send()'ed 0 bytes. It seems that peer can't accept data right now. Try again later.\n");
-        break;
+      // messages were found in the queue, popping one
+      // the SendMessage operation allocates the unsent_buffer element within the user object
+      len_to_send = to_send->SendMessage(&user->unsent_buffer);
+      user->current_sending_byte = 0;
+      user->unsent_bytes = len_to_send;
+    }
+    
+    // Count bytes to send.
+    len_to_send = user->unsent_bytes - user->current_sending_byte;
+    if (len_to_send > MAX_PAYLOAD_SIZE)
+      len_to_send = MAX_PAYLOAD_SIZE;
+    
+    // trying to send len_to_send bytes from unsent_buffer
+    sent_count = send(user->GetSocketID(), user->unsent_buffer + user->current_sending_byte, len_to_send, 0);
+    if (sent_count < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        printf("peer is not ready right now, try again later.\n");
       }
-      else if (sent_count > 0) {
-        sent_total += sent_count;
-        printf("send()'ed %zd bytes.\n", sent_count);
+      else {
+        perror("send() from peer error");
+        return -1;
       }
-    } while (sent_count > 0);
-  }
-  printf("Total send()'ed %zu bytes.\n", sent_total);
+    }
+    // we have read as many as possible
+    else if (sent_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      break;
+    }
+    else if (sent_count == 0) {
+      printf("send()'ed 0 bytes. It seems that peer can't accept data right now. Try again later.\n");
+      break;
+    }
+    else if (sent_count > 0) {
+      user->current_sending_byte += sent_count;
+      sent_total += sent_count;
+    }
+  } while (sent_count > 0);
   return 0;
 }

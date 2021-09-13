@@ -6,6 +6,7 @@ ClientElement::ClientElement()
 {
 	user_id = "";
     chat_partner_id = "";
+    unsent_bytes = 0;
 }
 	
 ClientElement::~ClientElement()
