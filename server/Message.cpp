@@ -1,10 +1,11 @@
-#include "Message.hpp"  
+
 #include <openssl/rand.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "ClientElement.cpp"
+#include <string.h>
+
 #include "aes_base_support.cpp"
+#include "Message.hpp"  
 
 const int32_t STATIC_POSTFIX = 28;
 const int MAX_PAYLOAD_SIZE = 40000;
@@ -14,6 +15,7 @@ Message::Message()
     this->data = NULL;
     this->ct = NULL;
     this->data_dim = 0;
+    this->encrypted = false;
 }
 	
 Message::~Message()
@@ -115,6 +117,7 @@ int32_t Message::Encode_message(unsigned char* key){
     this->ct = (unsigned char*)calloc(this->ct_len, sizeof(unsigned char));
     memcpy(this->ct, tmpCiphertext, this->ct_len);
     free(tmpCiphertext);
+    this->encrypted = true;
     return 0;
 }
 
@@ -171,30 +174,41 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 }
 
 // serializes the data to be sent from the fields of Message object
-int32_t Message::SendMessage(int socketID, ClientElement* target){
+int32_t Message::SendMessage(unsigned char** buffer){
     int32_t cursor = 0;
-    int32_t totalSize = this->ct_len + STATIC_POSTFIX;
-    // init a buffer for the data
-    unsigned char* buffer = (unsigned char *)malloc(sizeof(int32_t)+16+12+this->ct_len);
-    // copy size of ciphertext
-    memcpy(buffer, &totalSize, sizeof(int32_t));
-    cursor += sizeof(int32_t);
-    // copy ciphertext
-    memcpy(buffer+cursor, this->ct, this->ct_len);
-    cursor += this->ct_len;
-    // copy cipthertext tag
-    memcpy(buffer+cursor, this->ct_tag, 16);
-    cursor += 16;
-    // copy IV
-    memcpy(buffer+cursor, this->iv, 12);
-    cursor += 12;
-    if(send(socketID, buffer, cursor, 0)){
-        target->IncreaseCounterTo();
-        return 0;
-    }else 
-        return -1;
+    if(encrypted){
+        // encrypted message previously encoded
+        int32_t totalSize = this->ct_len + STATIC_POSTFIX;
+        // init a buffer for the data
+        *buffer = (unsigned char *)malloc(sizeof(int32_t)+16+12+this->ct_len);
+        // copy size of ciphertext
+        memcpy(buffer, &totalSize, sizeof(int32_t));
+        cursor += sizeof(int32_t);
+        // copy ciphertext
+        memcpy(buffer+cursor, this->ct, this->ct_len);
+        cursor += this->ct_len;
+        // copy cipthertext tag
+        memcpy(buffer+cursor, this->ct_tag, 16);
+        cursor += 16;
+        // copy IV
+        memcpy(buffer+cursor, this->iv, 12);
+        cursor += 12;
+        cout << "Sending this many bytes of payload total: " << totalSize << endl;
+    }else{
+        // unencrypted message
+        int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
+        // init a buffer for the data
+        *buffer = (unsigned char *)malloc(-message_dim+sizeof(int32_t));
+        memcpy(buffer, &message_dim, sizeof(int32_t));
+        cursor += sizeof(int32_t);
+        memcpy(buffer+cursor, &this->op_code, sizeof(int32_t));
+        cursor += sizeof(int32_t);
+        memcpy(buffer+cursor, this->data, this->data_dim);
+        cursor += this->data_dim;
+    }
+    return cursor;
 }
-
+/*
 int32_t Message::SendUnencryptedMessage(int socketID){
     int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
     int32_t cursor = 0;
@@ -212,3 +226,10 @@ int32_t Message::SendUnencryptedMessage(int socketID){
     }else 
         return -1;
 };
+*/
+int Message::GetRealMessageSize(){
+    if(encrypted){
+        return sizeof(int32_t)+this->data_dim+STATIC_POSTFIX;
+    }else
+        return sizeof(int32_t)*2 +this->data_dim;
+}

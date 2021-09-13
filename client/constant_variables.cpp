@@ -37,3 +37,4 @@ const EVP_MD* md = EVP_sha256();
 // server connection info & utilities
 const string ADDRESS = "127.0.0.1";
 const int PORT = 9034;
+const int MAX_CLIENTS = 100;

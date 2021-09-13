@@ -11,6 +11,7 @@ class Message
 		int32_t data_dim;
 		int32_t counter;
 		int32_t op_code;
+		bool encrypted = false;
 
 	public:
 		Message();
@@ -28,12 +29,12 @@ class Message
 		unsigned char ct_tag[16]; //long long should have size 16 byte, 128 bit
 		int32_t getData(unsigned char** buffer, int32_t* datadim);
 		int32_t setData(void* buffer, int32_t buffer_dim);
-		int32_t SendMessage(int socketID, ClientElement* target);
+		int32_t SendMessage(unsigned char** buffer);
 		int32_t Encode_message(unsigned char* key);
 		void Unwrap_unencrypted_message(unsigned char* buffer, int32_t buff_len);
 		int32_t Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key);
-		int SendUnencryptedMessage(int socketID);
-
+		// int SendUnencryptedMessage(int socketID);
+		int GetRealMessageSize();
 
 };
 #endif

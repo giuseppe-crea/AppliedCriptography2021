@@ -1,4 +1,4 @@
-#include <string.h>
+#include <string>
 #include <openssl/x509_vfy.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>

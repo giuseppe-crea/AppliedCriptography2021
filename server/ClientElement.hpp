@@ -1,17 +1,15 @@
 #ifndef CLIENTELEMENT_H
 #define CLIENTELEMENT_H
-#include <string.h>
-#include <string>
+#include <list>
+
 #pragma once
-	
-using namespace std;
 
 class ClientElement  
 {
 	private:
 
-		string user_id;
-		string chat_partner_id;
+		std::string user_id;
+		std::string chat_partner_id;
 		unsigned char* sessionKey;
 		int32_t socket;
 		// Counter from is MANUALLY incremented before each handlemessage of ENCRYPTED messages only
@@ -29,18 +27,20 @@ class ClientElement
 		EVP_PKEY* pub_dh_key;
 		EVP_PKEY* pri_dh_key;
 		EVP_PKEY* public_key;
-		bool isBusy = false;
+		// list of Message elements still to send
+		list<Message*> list_pending_messages;
 
 	public:
 
+		bool isBusy = false;
 		ClientElement();
 		void IncreaseCounterFrom();
 		void IncreaseCounterTo();
 		bool CounterSizeCheck();
 		// SetUsername also loads the appropriate public key from file
-		int SetUsername(string username);
+		int SetUsername(std::string username);
 		string GetUsername();
-		void SetPartnerName(string username);
+		void SetPartnerName(std::string username);
 		string GetPartnerName();
 		void SetNonceReceived(int32_t nonce);
 		int32_t GetNonceReceived();
@@ -66,6 +66,9 @@ class ClientElement
 		unsigned char* GetSessionKey(int* len);
 		int GenerateKeysForUser();
 		unsigned char* GetToSendPubDHKey();
+		int Enqueue_message(Message* message);
+		Message* Dequeue_message();
+		int Size_pending_messages();
 		~ClientElement();
 
 };
