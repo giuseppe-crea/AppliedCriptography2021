@@ -1,9 +1,7 @@
-#include "Message.cpp"
 #include "signature_utilities.cpp"
 
-using namespace std;
-// authentication between client and server
 
+// authentication between client and server
 
 void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, unsigned char** sv_session_key, X509_STORE* store){
 	//generates random nonce to be sent

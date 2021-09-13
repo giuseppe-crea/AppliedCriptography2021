@@ -1,19 +1,14 @@
-
-#include "received_msg_handler.cpp"
+#include "client_sending.cpp"
+#include <sstream>
 using namespace std;
 
 
-
-int build_fd_sets(int32_t *pending_msg, int socket,fd_set *read_fds, fd_set *write_fds, fd_set *except_fds)
+int build_fd_sets(int socket,fd_set *read_fds, fd_set *except_fds)
 {
   FD_ZERO(read_fds);
   FD_SET(STDIN_FILENO, read_fds);
   FD_SET(socket, read_fds);
   
-  FD_ZERO(write_fds);
-  // there is smth to send, set up write_fd for server socket
-  if (*pending_msg > 0)
-    FD_SET(socket, write_fds);
   
   FD_ZERO(except_fds);
   FD_SET(STDIN_FILENO, except_fds);
@@ -50,7 +45,7 @@ int read_from_stdin(char *read_buffer, size_t max_len){
   if (len > 0 && read_buffer[len - 1] == '\n')
     read_buffer[len - 1] = '\0';
   
-  printf("Read from stdin %d bytes. Let's prepare message to send.\n", strlen(read_buffer));
+  printf("Read from stdin %ld bytes. Let's prepare message to send.\n", strlen(read_buffer));
 
   return len;
 }
@@ -87,12 +82,12 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         
     }
     //there is no command, so if chatting is true it's a message for the peer	
-    //else if(sessionVariables->chatting)
-        //send_to_peer(sessionVariables->sockfd, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1,&struct_mutex,&sharedVariables->counterAS,&sharedVariables->counterAB,sharedVariables->sv_session_key,sharedVariables->peer_session_key);
+    else if(sessionVariables->chatting)
+        send_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1);
 }
 
 
-int handle_read_from_stdin(message_queue *head, int32_t* pending_msg,struct session_variables* sessionVariables)
+int handle_read_from_stdin(struct session_variables* sessionVariables)
 {
   char read_buffer[MAX_PAYLOAD_SIZE]; // buffer for stdin
   int len;

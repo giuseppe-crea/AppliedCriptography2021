@@ -1,5 +1,5 @@
-#include <openssl/aes.h>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 using namespace std;
 
 int gcm_encrypt(unsigned char *plaintext, int plaintext_len,

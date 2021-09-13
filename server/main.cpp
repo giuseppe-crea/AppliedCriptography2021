@@ -16,8 +16,7 @@
 #include <openssl/rand.h>
 #include <filesystem>
 #include "ClientElement.hpp"
-#include "Message.cpp"
-#include "../client/signature_utilities.cpp"
+#include "signature_utilities.cpp"
 
 #define SERVER_IPV4_ADDR "127.0.0.1"
 #define PORT 9034   // port we're listening on

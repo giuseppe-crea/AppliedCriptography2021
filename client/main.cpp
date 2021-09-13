@@ -1,20 +1,6 @@
-#include "stream_utilities.cpp"
-#include <string.h>
-#include <string>
-#include <stdio.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
-#include <openssl/evp.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <iostream>
-#include <unistd.h>
-#include <fcntl.h>
+#include "received_msg_handler.cpp"
+
+using namespace std;
 
 // utility to handle the extraction of pub and prv key of identifying user
 bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY** cl_pr_key){
@@ -151,21 +137,13 @@ int main(int argc, char **argv){
     fd_set read_fds;
     fd_set except_fds;
 
-    printf("Waiting for server message or stdin input. Please, type text to send:\n");
-
-    // server socket always will be greater then STDIN_FILENO
     int maxfd = sessionVariables->sockfd;
-    
-    //message_queue* m_queue = NULL;
 
-    unsigned char sending_buffer[MAX_PAYLOAD_SIZE];
-    unsigned char receiving_buffer[MAX_PAYLOAD_SIZE];
-    int32_t pending_messages = 0;
-    int32_t receiving_bytes;
+    printf("Waiting for server message or stdin input. Please, type text to send:\n");
 
   while (1) {
     // Select() updates fd_set's, so we need to build fd_set's before each select()call.
-    build_fd_sets(&pending_messages, sessionVariables->sockfd, &read_fds, NULL, &except_fds);
+    build_fd_sets(sessionVariables->sockfd, &read_fds, &except_fds);
         
     int activity = select(maxfd + 1, &read_fds, NULL, &except_fds, NULL);
     
@@ -184,7 +162,7 @@ int main(int argc, char **argv){
       default:
         /* All fd_set's should be checked. */
         if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-          if (handle_read_from_stdin(m_queue, &pending_messages,sessionVariables) != 0)
+          if (handle_read_from_stdin(sessionVariables) != 0)
             close(sessionVariables->sockfd); 
             exit(-1);
         }
@@ -196,7 +174,7 @@ int main(int argc, char **argv){
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &read_fds)) {
-          if (receive_from_peer(&server, &handle_received_message) != 0)
+          if (received_msg_handler(sessionVariables) != 0)
             close(sessionVariables->sockfd); 
             exit(-1);
         }

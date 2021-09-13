@@ -1,7 +1,12 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 #pragma once
-	
+
+#include <stdint.h>
+#include <string.h>
+#include <sys/socket.h>
+using namespace std;
+
 class Message  
 {
 	private:

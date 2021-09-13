@@ -1,20 +1,4 @@
 #include "auth.cpp"
-#include <string.h>
-#include <string>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
-#include <openssl/evp.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <iostream>
-#include <unistd.h>
-#include <fcntl.h>
-using namespace std;
 
 struct session_variables{
     unsigned char* peer_session_key;
@@ -28,6 +12,8 @@ struct session_variables{
     bool chatting;
     EVP_PKEY* cl_prvkey;
     EVP_PKEY* cl_pubkey;
+    EVP_PKEY* peer_public_key;
+    EVP_PKEY* cl_dh_prvkey;
 };
 
 
@@ -60,7 +46,7 @@ void send_to_sv(int32_t opcode, struct session_variables* sessionVariables, unsi
 }
 
 // function that sends message to peer
-void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* struct_mutex,unsigned int* counterAS,unsigned int* counterAB, unsigned char* sv_key,unsigned char* peer_key){
+void send_to_peer(struct session_variables* sessionVariables,unsigned char* data, int32_t data_dim){
 
 
     Message* m_to_peer = new Message();
@@ -69,14 +55,14 @@ void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* struct
 
     if(m_to_peer->SetOpCode(peer_message_code)!= 0)
         perror("OPCODE_ERROR");
-    if(m_to_peer->SetCounter(*counterAB)!= 0)
+    if(m_to_peer->SetCounter(sessionVariables->counterAB)!= 0)
         perror("COUNTER_ERROR");
     if(data!=NULL) 
 	    if(m_to_peer->setData(data,data_dim)!= 0)
             perror("DATA_ERROR");
     
     // first en7cryption with peer key 
-    if(m_to_peer->Encode_message(peer_key)!= 0)
+    if(m_to_peer->Encode_message(sessionVariables->peer_session_key)!= 0)
         perror("ENCODING_ERROR");
 
     int32_t buffer_bytes = sizeof(int32_t) + m_to_peer->ct_len + STATIC_POSTFIX;
@@ -94,9 +80,9 @@ void send_to_peer(int sockfd,unsigned char* data, int32_t data_dim,mutex* struct
     memcpy(buffer + cursor,m_to_peer->GetIV(),12);
     cursor += 12;
 
-    send_to_sv(peer_message_code,sessionVariables,buffer,buffer_bytes);
-    struct_mutex->lock();
-    *counterAB++;
-    struct_mutex->unlock();
+    delete(m_to_peer);
+
+    send_to_sv(peer_message_code,sessionVariables,buffer,buffer_bytes);  
+    sessionVariables->counterAB++;
 
 };

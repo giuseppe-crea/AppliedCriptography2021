@@ -1,10 +1,7 @@
-#include "client_sending.cpp"
-
-
-using namespace std;
+#include "stream_utilities.cpp"
 
 // function to handle message containing the request of a user who wants to chat
-void chat_request_received(unsigned char* data, int sockfd, unsigned char* sv_session_key, unsigned int* counterAS, mutex* struct_mutex){
+void chat_request_received(unsigned char* data, struct session_variables* sessionVariables){
     //prints out the name of the user who wants to chat
     cout << "user " << data << " wants to chat, type y/n if accepted or denied";
     string reply;
@@ -15,13 +12,13 @@ void chat_request_received(unsigned char* data, int sockfd, unsigned char* sv_se
         if (strcmp(reply.c_str(),"y")){         
             invalid_answer = false;
         // message with accepted request gets sent
-        send_to_sv(chat_request_accept_code, sockfd, NULL, 0, struct_mutex, counterAS, sv_session_key);
+        send_to_sv(chat_request_accept_code, sessionVariables, NULL, 0);
         } 
         // request denied
         else if (strcmp(reply.c_str(),"n")){   
             invalid_answer = false;
         //message with denied request gets sent
-        send_to_sv(chat_request_denied_code, sockfd, NULL, 0, struct_mutex, counterAS, sv_session_key);
+        send_to_sv(chat_request_denied_code, sessionVariables, NULL, 0);
             
         } else cout << "Error: wrong answer" << endl;
     }    
@@ -29,9 +26,9 @@ void chat_request_received(unsigned char* data, int sockfd, unsigned char* sv_se
 
 
 //function that handles the accepted request from peer: sends random nonce to start session key negotiation
-void chat_request_accepted(unsigned char* data, bool* chatting, int* na, EVP_PKEY** peer_public_key, unsigned char* sv_session_key,  int sockfd, unsigned int* counterAS, mutex* struct_mutex){
-    
-    if(*chatting){
+void chat_request_accepted(unsigned char* data,struct session_variables* sessionVariables){
+
+    if(sessionVariables->chatting){
         perror("You already have an opened chat!");    
     }
     
@@ -39,16 +36,14 @@ void chat_request_accepted(unsigned char* data, bool* chatting, int* na, EVP_PKE
 
     cout << "chat request accepted" << endl;
 
-    struct_mutex->lock();
-
 
     
     // sends nonce for peer to server
-    RAND_bytes((unsigned char*)na, sizeof(int32_t));
+    RAND_bytes((unsigned char*)&(sessionVariables->na), sizeof(int32_t));
     unsigned char* buffer;
     int32_t buffer_dim = sizeof(int32_t);
-    memcpy(buffer, &na, buffer_dim);
-    send_to_sv(nonce_msg_code, sockfd, buffer, buffer_dim, struct_mutex, counterAS, sv_session_key);
+    memcpy(buffer, &(sessionVariables->na), buffer_dim);
+    send_to_sv(nonce_msg_code, sessionVariables, buffer, buffer_dim);
     free(buffer);    
 
     //stores the public key automatically sent with the accepted chat message
@@ -59,11 +54,10 @@ void chat_request_accepted(unsigned char* data, bool* chatting, int* na, EVP_PKE
     memcpy(&buffer, data+sizeof(int32_t), pem_dim);
     BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
 
-    *peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem,NULL,NULL,NULL);
+    sessionVariables->peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem,NULL,NULL,NULL);
     
-    *chatting = true;
+    sessionVariables->chatting = true;
 
-    struct_mutex->unlock();
 };
 
 // function to notify that the chat request has been denied
@@ -88,7 +82,7 @@ void peer_public_key_msg(unsigned char* data, EVP_PKEY** peer_public_key){
 }
 
 // function that handles recieved nonce from peer: it generates diffie-hellmann key and sends it to peer
-void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvkey, int32_t* na, EVP_PKEY* cl_pr_key, int sockfd, unsigned int* counterAS, mutex* struct_mutex){
+void nonce_msg(unsigned char* data, struct session_variables* sessionVariables){
     //gets a nonce in the clear
     int32_t nb;
     memcpy(&nb, data, sizeof(int32_t));
@@ -113,18 +107,18 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
     // key generation
     EVP_PKEY_CTX* kg_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
     EVP_PKEY_keygen_init(kg_ctx);
-    EVP_PKEY_keygen(kg_ctx,cl_dh_prvkey);
+    EVP_PKEY_keygen(kg_ctx,&(sessionVariables->cl_dh_prvkey));
     EVP_PKEY_CTX_free(kg_ctx);
 
     // save client public key in pem format in a memory BIO
     BIO* cl_dh_pubkey_pem = BIO_new(BIO_s_mem());
-    int ret = PEM_write_bio_PUBKEY(cl_dh_pubkey_pem,*cl_dh_prvkey);
+    int ret = PEM_write_bio_PUBKEY(cl_dh_pubkey_pem,sessionVariables->cl_dh_prvkey);
 
     if(ret==0)
         perror("PEM_SERIALIZATION");
 
     // computes random nonce
-    RAND_bytes((unsigned char*)na, sizeof(int32_t));
+    RAND_bytes((unsigned char*)&(sessionVariables->na), sizeof(int32_t));
 
     // sends the public key in pem format in clear 
     // and signed in combination with received nonce 
@@ -137,14 +131,14 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
     memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
     unsigned char* cl_sign;
 	unsigned int cl_sign_size;
-    signature(cl_pr_key, pt, &cl_sign, cl_pem_dim+sizeof(int32_t),&cl_sign_size);
+    signature(sessionVariables->cl_prvkey, pt, &cl_sign, cl_pem_dim+sizeof(int32_t),&cl_sign_size);
 
     // sends response message to server
     int32_t buffer_bytes; 
     buffer_bytes = cl_pem_dim + cl_sign_size + sizeof(long) + sizeof(unsigned int) + sizeof(int32_t);
     unsigned char* buffer = new unsigned char[buffer_bytes];
     int32_t cursor = 0;
-    memcpy(buffer, na, sizeof(int32_t));
+    memcpy(buffer, &(sessionVariables->na), sizeof(int32_t));
     cursor += sizeof(int);
     memcpy(buffer + cursor, &cl_pem_dim, sizeof(long));
     cursor += sizeof(long);
@@ -154,7 +148,7 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
     cursor += sizeof(unsigned int);
     memcpy(buffer + cursor, cl_sign, cl_sign_size);
     
-    send_to_sv(first_key_negotiation_code, sockfd, buffer, buffer_bytes, struct_mutex, counterAS, sv_key);
+    send_to_sv(first_key_negotiation_code, sessionVariables, buffer, buffer_bytes);
     free(cl_sign);
     free(buffer);
     free(pt);
@@ -162,7 +156,7 @@ void nonce_msg(unsigned char* data, unsigned char* sv_key, EVP_PKEY** cl_dh_prvk
 };
 
 // function that handles the recieved diffie-hellmann key of the peer and sends a newly generated dh key; it also computes the peer session key
-void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned char** peer_session_key, int na, EVP_PKEY* cl_pr_key, EVP_PKEY* peer_public_key, int sockfd, unsigned int* counterAS, mutex* struct_mutex){
+void first_key_negotiation(unsigned char* data, struct session_variables* sessionVariables){
     //gets the nonce to include in the signature of the reply msg for peer
     int32_t nb;
     int32_t read_dim = 0;
@@ -197,7 +191,7 @@ void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned 
 	unsigned char* peer_pem_buffer;
 	peer_pem_size = BIO_get_mem_data(peer_pem,&peer_pem_buffer);
 
-    if(!verify_sign(peer_public_key, peer_pem_buffer, na, peer_pem_size, peer_sign, peer_sign_size))
+    if(!verify_sign(sessionVariables->peer_public_key, peer_pem_buffer, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size))
         perror("INVALID_KEY_NEGOTIATION");
 
     // load elliptic curve parameters
@@ -240,7 +234,7 @@ void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned 
     memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
     unsigned char* cl_sign;
 	unsigned int cl_sign_size;
-    signature(cl_pr_key, pt, &cl_sign,cl_pem_dim+sizeof(int32_t),&cl_sign_size);
+    signature(sessionVariables->cl_prvkey, pt, &cl_sign,cl_pem_dim+sizeof(int32_t),&cl_sign_size);
 
     // sends response message to server
     int32_t buffer_bytes; 
@@ -255,7 +249,7 @@ void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned 
     cursor += sizeof(unsigned int);
     memcpy(buffer + cursor, cl_sign, cl_sign_size);
     
-    send_to_sv(second_key_negotiation_code, sockfd, buffer, buffer_bytes, struct_mutex, counterAS, sv_key);
+    send_to_sv(second_key_negotiation_code, sessionVariables, buffer, buffer_bytes);
     free(cl_sign);
     free(buffer);
 
@@ -281,16 +275,15 @@ void first_key_negotiation(unsigned char* data, unsigned char* sv_key, unsigned 
     // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
     EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
 
-    *peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
+    sessionVariables->peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
     unsigned int peer_session_key_length;
     EVP_DigestInit(hash_ctx,EVP_sha256());
     EVP_DigestUpdate(hash_ctx,secret,secret_length);
-    EVP_DigestFinal(hash_ctx,*peer_session_key, &peer_session_key_length);
-
+    EVP_DigestFinal(hash_ctx,sessionVariables->peer_session_key, &peer_session_key_length);
 };
 
 //function that handles the recieved diffie-hellmann key from peer; client has previously computed its dh key, and can generate the peer session key
-void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigned char** peer_session_key, int na, EVP_PKEY* cl_pr_key, EVP_PKEY* peer_public_key,mutex* struct_mutex){
+void second_key_negotiation(unsigned char* data, struct session_variables* sessionVariables){
     
     //gets the size of the peer pem file
     long peer_pem_size;
@@ -316,11 +309,11 @@ void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigne
 	unsigned char* peer_pem_buffer;
 	peer_pem_size = BIO_get_mem_data(peer_pem, &peer_pem_buffer);
 
-    if(!verify_sign(peer_public_key, peer_pem_buffer, na, peer_pem_size, peer_sign, peer_sign_size))
+    if(!verify_sign(sessionVariables->peer_public_key, peer_pem_buffer, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size))
         perror("INVALID_KEY_NEGOTIATION");
 
     // session key derivation
-    EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(cl_dh_prvkey, NULL);
+    EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(sessionVariables->cl_dh_prvkey, NULL);
     EVP_PKEY_derive_init(kd_ctx);
 
     int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
@@ -341,25 +334,19 @@ void second_key_negotiation(unsigned char* data, EVP_PKEY* cl_dh_prvkey, unsigne
     // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
     EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
 
-    struct_mutex->lock();
-
-    *peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
+    sessionVariables->peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
     unsigned int peer_session_key_length;
     EVP_DigestInit(hash_ctx,EVP_sha256());
     EVP_DigestUpdate(hash_ctx,secret,secret_length);
-    EVP_DigestFinal(hash_ctx,*peer_session_key, &peer_session_key_length);
+    EVP_DigestFinal(hash_ctx,sessionVariables->peer_session_key, &peer_session_key_length);
 
-    struct_mutex->unlock();
 };
 
 // function that handles notification of closed chat
-void closed_chat(bool* chatting,mutex* struct_mutex){
+void closed_chat(bool* chatting){
     //closes chat with peer 
-    struct_mutex->lock();
 
     *chatting = false;
-
-    struct_mutex->unlock();
 
     cout << "Your chatting partner has closed the chat. If you want to keep chatting, find another partner." << endl;
 };
@@ -396,17 +383,15 @@ void list(unsigned char* data, int data_dim){
 };
 
 // function that handles a message receieved from peer
-void peer_message_received(unsigned char* message, int32_t message_dim, unsigned int* counterBA, unsigned char* peer_session_key, mutex* struct_mutex){
-    struct_mutex->lock();
-
-
+void peer_message_received(unsigned char* message, int32_t message_dim, struct session_variables* sessionVariables){
+    
     Message* m_from_peer = new Message();
 
     int32_t total_size;
     memcpy(&total_size, message, sizeof(int32_t));
-    m_from_peer->Decode_message(message+sizeof(int32_t), total_size, peer_session_key);
+    m_from_peer->Decode_message(message+sizeof(int32_t), total_size, sessionVariables->peer_session_key);
 
-    if(m_from_peer->GetOpCode() != peer_message_code || m_from_peer->GetCounter() != *counterBA)
+    if(m_from_peer->GetOpCode() != peer_message_code || m_from_peer->GetCounter() != sessionVariables->counterBA)
         perror("MESSAGE_FROM_PEER");
     unsigned char* buffer;
     int32_t buffer_bytes;
@@ -415,7 +400,6 @@ void peer_message_received(unsigned char* message, int32_t message_dim, unsigned
 
     delete(m_from_peer);
 
-    *counterBA++;
+    sessionVariables->counterBA++;
 
-    struct_mutex->unlock();
 };
