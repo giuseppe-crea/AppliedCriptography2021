@@ -6,6 +6,7 @@
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <unistd.h>
 
 // utility to handle the extraction of pub and prv key of identifying user
 bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY** cl_pr_key){

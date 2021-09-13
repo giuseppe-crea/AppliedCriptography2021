@@ -1,7 +1,6 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 #pragma once
-#include <stdint.h>
 	
 class Message  
 {

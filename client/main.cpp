@@ -1,4 +1,20 @@
 #include "stream_utilities.cpp"
+#include <string.h>
+#include <string>
+#include <stdio.h>
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/evp.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <iostream>
+#include <unistd.h>
+#include <fcntl.h>
 
 // utility to handle the extraction of pub and prv key of identifying user
 bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY** cl_pr_key){
@@ -140,7 +156,7 @@ int main(int argc, char **argv){
     // server socket always will be greater then STDIN_FILENO
     int maxfd = sessionVariables->sockfd;
     
-    message_queue* m_queue = NULL;
+    //message_queue* m_queue = NULL;
 
     unsigned char sending_buffer[MAX_PAYLOAD_SIZE];
     unsigned char receiving_buffer[MAX_PAYLOAD_SIZE];
