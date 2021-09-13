@@ -2,6 +2,8 @@
 #define CLIENTELEMENT_H
 #include <list>
 
+#include "Message.cpp"
+
 #pragma once
 
 class ClientElement  

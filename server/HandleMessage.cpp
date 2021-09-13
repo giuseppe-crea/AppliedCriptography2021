@@ -57,9 +57,9 @@ int receive_from_peer(ClientElement* user)
     return -1;
   }
   if(noname)
-    std::printf("[%d] wants to send %d bytes.\n", user->GetSocketID(), len_to_receive);
+    std::printf("[%d] wants to send %ld bytes.\n", user->GetSocketID(), len_to_receive);
   else
-    std::printf("[%s] wants to send %d bytes.\n", user->GetUsername().c_str(), len_to_receive);
+    std::printf("[%s] wants to send %ld bytes.\n", user->GetUsername().c_str(), len_to_receive);
   received_total = 0;
   unsigned char* buffer = (unsigned char*)calloc(len_to_receive,sizeof(unsigned char));
   
@@ -97,7 +97,7 @@ int receive_from_peer(ClientElement* user)
     if(noname)
       std::printf("[%d] Handling unencrypted message...\n", user->GetSocketID());
     else
-      std::printf("[%s] Handling unencrypted message...\n", user->GetUsername());
+      std::printf("[%s] Handling unencrypted message...\n", user->GetUsername().c_str());
     // TODO: Handle it
     // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
   }
@@ -107,11 +107,11 @@ int receive_from_peer(ClientElement* user)
     unsigned char* data;
     rcv_msg->getData(&data, &data_dim);
     if(rcv_msg->GetCounter() == user->GetCounterFrom()){
-      std::printf("[%s] Handling encrypted message...\n", user->GetUsername());
+      std::printf("[%s] Handling encrypted message...\n", user->GetUsername().c_str());
       // TODO: Handle it
       // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
     }else{
-      fprintf(stderr,"[%s] Counter mismatch, dropping.\n", user->GetUsername());
+      fprintf(stderr,"[%s] Counter mismatch, dropping.\n", user->GetUsername().c_str());
       return -1;
     }
   }
@@ -120,7 +120,7 @@ int receive_from_peer(ClientElement* user)
 
 int send_to_peer(ClientElement* user)
 {
-  printf("[%s] Ready for send().\n", user->GetUsername());
+  printf("[%s] Ready for send().\n", user->GetUsername().c_str());
   
   size_t len_to_send;
   ssize_t sent_count;

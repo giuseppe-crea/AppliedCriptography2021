@@ -1,6 +1,6 @@
 #include "getKeys.cpp"
 #include "ClientElement.hpp"  
-#include "Message.cpp"
+
 
 ClientElement::ClientElement()
 {
@@ -220,7 +220,7 @@ Message* ClientElement::Dequeue_message(){
         list_pending_messages.pop_front();
         return send_this;
     }
-
+    return NULL;
 }
 
 int ClientElement::Size_pending_messages(){

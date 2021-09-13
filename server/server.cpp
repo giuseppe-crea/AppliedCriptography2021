@@ -111,6 +111,28 @@ int start_listen_socket(int *listen_sock)
   return 0;
 }
 
+int close_client_connection(ClientElement *client)
+{
+  string username = client->GetUsername();
+  int client_socket = client->GetSocketID();
+  if(strcmp(username.c_str(),"") != 0)
+    printf("Close client socket for %s.\n", username.c_str());
+  else
+    printf("Close client socket number %d.\n", client_socket);
+  
+  close(client_socket);
+
+  // if the client had a partner, we close that chat
+  if(client->isBusy){
+    ClientElement* partner = get_user_by_id(client->GetPartnerName());
+    partner->SetPartnerName("");
+    partner_has_ended_chat_message(partner);
+    client->SetPartnerName("");
+  }
+  delete(client);
+  return 0;
+}
+
 void shutdown_properly(int code)
 {
   int i;
@@ -179,28 +201,6 @@ int handle_new_connection()
   std::printf("There are too many connections. Closing new connection %s:%d.\n", client_ipv4_str, client_addr.sin_port);
   close(new_client_sock);
   return -1;
-}
-
-int close_client_connection(ClientElement *client)
-{
-  string username = client->GetUsername();
-  int client_socket = client->GetSocketID();
-  if(strcmp(username.c_str(),"") != 0)
-    printf("Close client socket for %s.\n", username);
-  else
-    printf("Close client socket number %d.\n", client_socket);
-  
-  close(client_socket);
-
-  // if the client had a partner, we close that chat
-  if(client->isBusy){
-    ClientElement* partner = get_user_by_id(client->GetPartnerName());
-    partner->SetPartnerName("");
-    partner_has_ended_chat_message(partner);
-    client->SetPartnerName("");
-  }
-  delete(client);
-  return 0;
 }
  
 int main(int argc, char **argv)
