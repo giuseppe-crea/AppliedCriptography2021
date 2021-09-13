@@ -4,10 +4,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "aes_base_support.cpp"
+using namespace std;
 
 const int32_t STATIC_POSTFIX = 28;
 const int MAX_PAYLOAD_SIZE = 40000;
-	
+
 Message::Message()
 {
     this->data = NULL;

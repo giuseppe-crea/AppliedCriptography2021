@@ -1,6 +1,5 @@
 
 #include "client_receiving.cpp"
-#include <unistd.h>
 using namespace std;
 
 struct shared_variables{
