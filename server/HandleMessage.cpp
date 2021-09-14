@@ -524,10 +524,12 @@ int HandleOpCode(Message* message, ClientElement* user){
   return 0;
 }
 
+
 /* Receive message from peer and handle it with message_handler(). */
 // TODO: Modify this so that it stores everything in a temporary buffer within
 // the user object for as long as the return from recv > 0
 // AS IT STANDS, IF A CLIENT DCS, THIS GETS STUCK ON THE FIRST WHILE LOOP
+
 int receive_from_peer(ClientElement* user)
 {
   bool noname = true;
@@ -550,7 +552,29 @@ int receive_from_peer(ClientElement* user)
   // recover the total message size
   while(received_total<sizeof(int32_t)){
     received_count = recv(user->GetSocketID(), (char *)&len_to_receive, sizeof(int32_t)-received_total, MSG_DONTWAIT);
-    received_total += received_count;
+    if (received_count < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::printf("[%s] is not ready right now, try again later.\n", user->GetUsername().c_str());
+      }
+      else {
+          string error_message = "["+user->GetUsername()+"] recv() error\n";
+          perror(error_message.c_str());
+          return -1;
+      }
+    } 
+    else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        return 0;
+    }
+    // If recv() returns 0, it means that peer gracefully shutdown.
+    else if (received_count == 0 && received_total != len_to_receive) {
+        std::printf("[%s] recv() 0 bytes. Peer gracefully shutdown.\n", user->GetUsername().c_str());
+        return -1;
+    }
+    else if (received_count > 0) {
+        received_total += received_count;
+    }
+    else if (received_total == len_to_receive)
+        return 0;
   }
 
   // check the message size sign, to differentiate encrypted messages from unencrypted ones.
@@ -583,7 +607,7 @@ int receive_from_peer(ClientElement* user)
       }
     } 
     else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        break;
+        return 0;
     }
     // If recv() returns 0, it means that peer gracefully shutdown.
     else if (received_count == 0 && received_total != len_to_receive) {
@@ -594,7 +618,7 @@ int receive_from_peer(ClientElement* user)
         received_total += received_count;
     }
     else if (received_total == len_to_receive)
-        break;
+        return 0;
   }
   // MADE IT HERE
   // At this point we possess the whole message
