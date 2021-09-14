@@ -159,14 +159,17 @@ int ClientElement::GenerateKeysForUser(){
     return 0;
 }
 
+// returns a SHALLOW COPY. DO NOT FREE MANUALLY
 unsigned char* ClientElement::GetToSendPubDHKey(){
     return pub_dh_key_to_send;
 }
 
+// returns a SHALLOW COPY. DO NOT FREE MANUALLY
 BIO* ClientElement::GetPeerPublicDHKey(){
     return this->pub_dh_key_received;
 }
 
+// SETS A SHALLOW COPY. DO NOT FREE THE GIVEN KEY
 int ClientElement::SetPeerPublicDHKey(BIO* key, long keysize){
     if(this->pub_dh_key_received == NULL){
         if(key != NULL){

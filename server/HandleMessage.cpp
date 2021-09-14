@@ -1,5 +1,28 @@
 #include "ClientElement.cpp"
 #include "../client/constant_variables.cpp"
+#include "signature_utilities.cpp"
+
+// functions to handle the loading of keys and certs
+X509* load_server_cert(){
+  // load server cert
+  FILE *fp_SV_cert = fopen("../certificates/serv_cert.pem", "r"); 
+  if(!fp_SV_cert){
+    perror("SV certificate pem file");
+    exit(-1);
+  }
+  X509* SV_cert = PEM_read_X509(fp_SV_cert, NULL, NULL, NULL);
+  fclose(fp_SV_cert);
+  return SV_cert;
+}
+
+EVP_PKEY* load_server_private_key(){
+  EVP_PKEY* sv_pr_key;
+  // load private key
+  FILE* pem_sv_prvkey = fopen("../certificates/serv_prvkey.pem","r");
+  sv_pr_key = PEM_read_PrivateKey(pem_sv_prvkey,NULL,NULL,NULL);
+  fclose(pem_sv_prvkey);
+  return sv_pr_key;
+}
 
 int quick_message(ClientElement* target, int opCode){
     // notify partner the chat has been aborted
@@ -23,11 +46,132 @@ int partner_has_ended_chat_message(ClientElement* target){
     return 0;
 }
 
+int first_auth_message_handler(Message* message, ClientElement* user){
+  unsigned char* data_buffer;
+  int data_buf_len;
+  int32_t nonce_user;
+  if(!message->getData(&data_buffer, &data_buf_len)){
+    // copy sizeof(int32_t) bytes from buffer to nonce
+    memcpy(&nonce_user, data_buffer, sizeof(int32_t));
+    
+    // copy data_buf_len - sizeof(int32_t) bytes into username
+    unsigned char* username_buffer = new unsigned char[data_buf_len-sizeof(int32_t)];
+    memcpy(username_buffer, data_buffer+sizeof(int32_t), data_buf_len-sizeof(int32_t));
+    memcpy(username_buffer+data_buf_len-sizeof(int32_t)-1, "\0", 1);
+    string username = (reinterpret_cast<char*>(username_buffer));
+    
+    // add a mapping (username, clientelement) for this user
+    // then populating the ClientElement object
+    connectedClientsByUsername.insert(std::pair<std::string, ClientElement*>(username, user));
+    // WARNING: This operation also loads the related public key
+    user->SetUsername(username);
+    user->SetNonceReceived(nonce_user);
+    free(data_buffer);
+  }else{
+    fprintf(stderr, "first auth message: getdata");
+    free(data_buffer);
+    return -1;
+  }
+  if(user->GenerateKeysForUser()){
+    fprintf(stderr, "DH Key generation failed");
+    free(data_buffer);
+    return 1;
+  }
+  // build reply for the client
+  // init and fill a nonce from the server
+  int32_t ns;
+  RAND_bytes((unsigned char*)&ns, sizeof(int32_t));
+  user->SetNonceSent(ns);
+  // get the public DH key in pem format, and its size
+  long pem_size = user->GetToSendPubDHKeySize();
+  unsigned char* pem_buffer = user->GetToSendPubDHKey();
+  // allocate space for the plaintext reply
+  unsigned char* plaintext_to_sign = (unsigned char*)calloc(pem_size+sizeof(int32_t), sizeof(unsigned char));
+  // recover the received nonce, which we unwrapped earlier
+  int32_t na = user->GetNonceReceived();
+  // add pem and nonce to plaintext_to_sign
+  memcpy(plaintext_to_sign, pem_buffer, pem_size);
+  memcpy(plaintext_to_sign+pem_size, &na, sizeof(int32_t));
+  // init variables for the signature
+  unsigned char* sign;
+	unsigned int sign_size;
+  // load the private key, sign the received nonce and sent dh-key, free private key
+  EVP_PKEY* server_private_key = load_server_private_key();
+  signature(server_private_key, plaintext_to_sign, &sign, pem_size+sizeof(int32_t), &sign_size);
+  EVP_PKEY_free(server_private_key);
+  free(plaintext_to_sign);
+  // load server cert as X509, load it as BIO, free the X509 
+  X509* server_cert = load_server_cert();
+  BIO* serv_cert_BIO = BIO_new(BIO_s_mem());
+  unsigned char* serv_cert_buffer;
+  PEM_write_bio_X509(serv_cert_BIO, server_cert);
+  long cert_size = BIO_get_mem_data(serv_cert_BIO, &serv_cert_buffer);
+  X509_free(server_cert);
+
+  // add everything to a send buffer
+  int buffer_temp_size = (2*sizeof(int32_t))+sizeof(long)+pem_size+sign_size+cert_size;
+  unsigned char* buffer = (unsigned char*)calloc(buffer_temp_size,sizeof(unsigned char));
+  int cursor = 0;
+  memcpy(buffer ,&ns, sizeof(int32_t));
+  cursor += sizeof(int32_t);
+  memcpy(buffer+cursor ,&pem_size, sizeof(long));
+  cursor += sizeof(long);
+  memcpy(buffer+cursor, pem_buffer, pem_size);
+  cursor += pem_size;
+  memcpy(buffer+cursor, &sign_size, sizeof(int32_t));
+  cursor += sizeof(int32_t);
+  memcpy(buffer+cursor, sign, sign_size);
+  cursor += sign_size;
+  memcpy(buffer+cursor, serv_cert_buffer, cert_size);
+  cursor += cert_size;
+
+  // and finally build the reply message and queue it
+  int ret = 0;
+  Message* reply = new Message();
+  ret += reply->SetOpCode(second_auth_msg_code);
+  ret += reply->setData(buffer, cursor);
+  ret += user->Enqueue_message(reply);
+
+  free(buffer);
+  free(sign);
+  // serv_cert_buffer points to the same memory as the serv_cert_BIO
+  // but the BIO requires a macro call to properly free
+  // thus we don't call free on serv_cert_buffer
+  BIO_free(serv_cert_BIO);
+  return ret;
+}
+
+int HandleOpCode(Message* message, ClientElement* user){
+  int32_t opCode = message->GetOpCode();
+  switch(opCode){
+    case -1:{
+      // failure to get the opCode
+      return -1;
+    break;
+    }
+    case first_auth_msg_code:{
+      if(first_auth_message_handler(message, user) != 0){
+        fprintf(stderr, "[HandleOpCode] First Auth Message for socket %d failed.", user->GetSocketID());
+        return -1;
+      }else{
+        printf("[HandleOpCode][first_auth_message_handler] User %s done.", user->GetUsername().c_str());
+      }
+    break;
+    }
+  }
+  return 0;
+}
+
 /* Receive message from peer and handle it with message_handler(). */
+// TODO: Modify this so that it stores everything in a temporary buffer within
+// the user object for as long as the return from recv > 0
 int receive_from_peer(ClientElement* user)
 {
   bool noname = true;
   bool encrypted = false;
+  // first of all, let's check user for null
+  if(user == NULL)
+    return -1;
   // the user has been found via socket id; 
   // we check if they have a user id associated with them
   if(strcmp(user->GetUsername().c_str(), "") == 0){
@@ -93,7 +237,8 @@ int receive_from_peer(ClientElement* user)
   // At this point we possess the whole message
   Message* rcv_msg = new Message();
   if(!encrypted){
-    rcv_msg->Unwrap_unencrypted_message(buffer, len_to_receive);
+    if(!rcv_msg->Unwrap_unencrypted_message(buffer, len_to_receive))
+      return -1;
     if(noname)
       std::printf("[%d] Handling unencrypted message...\n", user->GetSocketID());
     else
@@ -102,7 +247,8 @@ int receive_from_peer(ClientElement* user)
     // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
   }
   if(encrypted){
-    rcv_msg->Decode_message(buffer, len_to_receive, user->GetSessionKey());
+    if(!rcv_msg->Decode_message(buffer, len_to_receive, user->GetSessionKey()))
+      return -1;
     int data_dim;
     unsigned char* data;
     rcv_msg->getData(&data, &data_dim);
@@ -115,7 +261,20 @@ int receive_from_peer(ClientElement* user)
       return -1;
     }
   }
-  return 0;
+  if(user->CounterSizeCheck()){
+    // the user's to or from counter reached INT_MAX(!!) size
+    // gotta put them in the timeout box
+    Message* reply = new Message();
+    reply->SetCounter(user->GetCounterTo());
+    reply->SetOpCode(forced_logout_code);
+    reply->setData(NULL, 0);
+    reply->Encode_message(user->GetSessionKey());
+    user->Enqueue_message(reply);
+    printf("[%s] reached MAX_INT on one of its counters, disconnecting them.", noname ? (char*)user->GetSocketID() : user->GetUsername().c_str());
+    return 0;
+  }
+  // return 0 on success
+  return HandleOpCode(rcv_msg, user);
 }
 
 int send_to_peer(ClientElement* user)
@@ -142,6 +301,8 @@ int send_to_peer(ClientElement* user)
       len_to_send = to_send->SendMessage(&user->unsent_buffer);
       user->current_sending_byte = 0;
       user->unsent_bytes = len_to_send;
+      // at this point we can free the dequeued message
+      delete(to_send);
     }
     
     // Count bytes to send.

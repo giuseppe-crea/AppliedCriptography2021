@@ -329,12 +329,12 @@ int HandleMessage(EVP_PKEY* server_private_key, X509* server_cert, Message* mess
             
             // free all the buffers
             printf("[HM1]: Freeing memory.\n");
-            free(pem_buffer);
+            //free(pem_buffer);
             free(pt);
             free(cl_sign);
             free(buffer);
-            free(serv_cert_buffer);
-            //BIO_free(serv_cert_BIO); // corrupted size vs. prev_size while consolidating
+            //free(serv_cert_buffer);
+            BIO_free(serv_cert_BIO); // corrupted size vs. prev_size while consolidating
             delete(reply);
             printf("[HM1]: Done.\n");
         break;

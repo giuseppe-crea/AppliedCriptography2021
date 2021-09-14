@@ -16,6 +16,7 @@ Message::Message()
     this->ct = NULL;
     this->data_dim = 0;
     this->encrypted = false;
+    this->op_code = -1;
 }
 	
 Message::~Message()
@@ -67,6 +68,7 @@ int32_t Message::GetOpCode(){
     return this->op_code;
 }
 
+// runs a DEEP COPY of the given buffer for given buffer_dim
 int32_t Message::setData(void* buffer, int32_t buffer_dim){
     if(buffer == NULL){
         this->data = NULL;
@@ -82,6 +84,7 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
     return 1;
 }
 
+// returns a DEEP COPY of the message's data into buffer, which size will be specified in datadim
 int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
     if(this->data != NULL){
         *datadim = this->data_dim;
@@ -123,7 +126,7 @@ int32_t Message::Encode_message(unsigned char* key){
 
 // when receiving an unencrypted message
 // sets opcode and data buffer in the Message object
-void Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
+bool Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_size_buffer){
     int32_t cursor = 0;
     int32_t opCode;
     memcpy(&opCode, buffer, sizeof(int32_t));
@@ -131,13 +134,15 @@ void Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_siz
     this->SetOpCode(opCode);
     unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer-cursor);
     memcpy(data_buffer, buffer+cursor, data_size_buffer-cursor);
-    this->setData(data_buffer, data_size_buffer-cursor);
+    if(this->setData(data_buffer, data_size_buffer-cursor))
+        return false;
+    return true;
 }
 
 // fills out the following fields:
 // opCode; Counter; data; data_dim
 // data will be decrypted plaintext
-int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key){
+bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key){
     int32_t cursor = 0;
     // init a buffer for the data
     int32_t opCode;
@@ -153,12 +158,11 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     memcpy(iv_buffer, buffer+cursor, 12);
     cursor += 12;
 
-
     // decryption
     unsigned char* pt_buffer;
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0){
-        return 1;
+        return false;
     }
     cursor = 0;
     memcpy(&opCode, pt_buffer, sizeof(int32_t));
@@ -168,9 +172,9 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
     if(!this->setData(pt_buffer+cursor, dataLen-cursor)){
-        return 1;
+        return false;
     }
-    return 0;
+    return true;
 }
 
 // serializes the data to be sent from the fields of Message object
