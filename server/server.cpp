@@ -95,28 +95,6 @@ int start_listen_socket(int *listen_sock)
   return 0;
 }
 
-int close_client_connection(ClientElement *client)
-{
-  string username = client->GetUsername();
-  int client_socket = client->GetSocketID();
-  if(strcmp(username.c_str(),"") != 0)
-    printf("Close client socket for %s.\n", username.c_str());
-  else
-    printf("Close client socket number %d.\n", client_socket);
-  
-  close(client_socket);
-
-  // if the client had a partner, we close that chat
-  if(client->isBusy){
-    ClientElement* partner = get_user_by_id(client->GetPartnerName());
-    partner->SetPartnerName("");
-    partner_has_ended_chat_message(partner);
-    client->SetPartnerName("");
-  }
-  delete(client);
-  return 0;
-}
-
 void shutdown_properly(int code)
 {
   int i;

@@ -45,24 +45,26 @@ ClientElement* get_user_by_socket(int socket){
 
 int quick_message(ClientElement* target, int opCode){
     // notify partner the chat has been aborted
+    int ret = 0;
     Message* reply = new Message();
-    reply->SetCounter(target->GetCounterTo());
-    reply->SetOpCode(opCode);
-    reply->setData(NULL, 0);
-    reply->Encode_message(target->GetSessionKey());
-    target->Enqueue_message(reply);
-    return 0;
+    ret += reply->SetCounter(target->GetCounterTo());
+    ret += reply->SetOpCode(opCode);
+    ret += reply->setData(NULL, 0);
+    ret += reply->Encode_message(target->GetSessionKey());
+    ret += target->Enqueue_message(reply);
+    return ret;
 }
 
-int partner_has_ended_chat_message(ClientElement* target){
-    // notify partner the chat has been aborted
+int end_chat_handler(ClientElement* user, Message* message){
+  ClientElement *target = get_user_by_id(user->GetPartnerName());
+  int ret = -1;
+  if(target != NULL){
     Message* reply = new Message();
-    reply->SetCounter(target->GetCounterTo());
-    reply->SetOpCode(closed_chat_code);
-    reply->setData(NULL, 0);
-    reply->Encode_message(target->GetSessionKey());
-    target->Enqueue_message(reply);
-    return 0;
+    ret += quick_message(target, closed_chat_code);
+    target->SetPartnerName("");
+    user->SetPartnerName("");
+  }
+  return ret;
 }
 
 int first_auth_message_handler(Message* message, ClientElement* user){
@@ -268,7 +270,7 @@ int chat_request_handler(Message* message, ClientElement* user){
       }else{
         // queueing the  reply message failed! Freeing it and telling the requesting user
         // this chat non s'ha da fare
-        free(reply);
+        delete(reply);
         return quick_message(user, chat_request_denied_code);
       }         
   }else
@@ -308,8 +310,9 @@ int send_peer_pubkey(ClientElement* user, int opCode){
   free(send_buffer);
   if(ret != 0){
     // an error occurred communicating with Bob, telling Alice the request was denied
-    free(reply);
+    delete(reply);
     user->SetPartnerName("");
+    partner->SetPartnerName("");
     return quick_message(user, chat_request_denied_code);
   }
   return 0;
@@ -333,6 +336,119 @@ int chat_request_accepted_handler(Message* message, ClientElement* user){
   return 0;
 }
 
+int chat_request_denied_handler(Message* message, ClientElement* user){
+  ClientElement *partner = get_user_by_id(user->GetPartnerName());
+  if(partner != NULL){
+    user->SetPartnerName("");
+    partner->SetPartnerName("");
+    return quick_message(partner, chat_request_denied_code);
+  }
+  return -1;
+}
+
+// despite the name, this function allocates a NEW Message object
+// it then copies data and opcode from the received message
+// encodes and encrypts them with the user's partner session key
+// and sends the message to the partner
+// RETURNS true if there are any errors, false otherwise
+int message_passthrough(ClientElement* user, Message* message){
+    if(user == NULL){
+        return -1;
+    }
+    ClientElement *target = get_user_by_id(user->GetPartnerName());
+    if(target == NULL){
+        return -1;
+    }
+    Message* reply = new Message();
+    int ret = 0;
+    unsigned char* data_buffer;
+    int data_buf_len;
+    ret += reply->SetCounter(target->GetCounterTo());
+    ret += reply->SetOpCode(message->GetOpCode());
+    ret += message->getData(&data_buffer, &data_buf_len);
+    ret += reply->setData(data_buffer, data_buf_len);
+    ret += reply->Encode_message(target->GetSessionKey());
+    free(data_buffer);
+    if(ret == 0)
+        ret += target->Enqueue_message(reply);
+    if(ret != 0)
+      delete(reply);
+      return quick_message(user, closed_chat_code);
+    return ret;
+}
+
+// returns the length of the allocated buffer
+// inserts all active clients, separated by null terminator
+// TODO: limit reply size to INT_MAX
+int serialize_active_clients(unsigned char** buffer, string requester){
+  std::map<std::string, ClientElement*>::iterator it;
+  int cursor = 0;
+  unsigned char* tmpBuffer = (unsigned char*)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
+  for (it = connectedClientsByUsername.begin(); it != connectedClientsByUsername.end(); it++)
+  {
+    if(!it->second->isBusy && cursor < MAX_PAYLOAD_SIZE && strcmp(it->second->GetUsername().c_str(),requester.c_str()) != 0){
+      string username = it->second->GetUsername();
+      int32_t len_of_username = username.length()+1;
+      if(cursor+len_of_username+sizeof(int32_t) < MAX_PAYLOAD_SIZE){
+        memcpy(tmpBuffer+cursor, &len_of_username, sizeof(int32_t));
+        cursor += sizeof(int32_t);
+        memcpy(tmpBuffer+cursor, username.c_str(), len_of_username);
+        cursor += len_of_username;
+      }else{
+        *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
+        memcpy(*buffer, tmpBuffer, cursor);
+        return cursor;
+      }
+    }
+  }
+  *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
+  memcpy(*buffer, tmpBuffer, cursor);
+  return cursor;
+}
+
+int list_request_handler(ClientElement* user, Message* message){
+  unsigned char* data_buffer;
+  int32_t data_buf_len = serialize_active_clients(&data_buffer, user->GetUsername());
+  Message* reply = new Message();
+  int ret = 0;
+  ret += reply->SetCounter(user->GetCounterTo());
+  ret += reply->SetOpCode(list_code);
+  ret += reply->setData(data_buffer, data_buf_len);
+  ret += reply->Encode_message(user->GetSessionKey());
+  if(ret == 0)
+    ret += user->Enqueue_message(reply);
+  else{
+    delete(reply);
+    if(user->isBusy)
+      end_chat_handler(user, NULL);
+  }
+  return ret;
+}
+
+int close_client_connection(ClientElement *client)
+{
+  string username = client->GetUsername();
+  int client_socket = client->GetSocketID();
+  if(strcmp(username.c_str(),"") != 0)
+    printf("Close client socket for %s.\n", username.c_str());
+  else
+    printf("Close client socket number %d.\n", client_socket);
+  
+  close(client_socket);
+
+  // if the client had a partner, we close that chat
+  if(client->isBusy){
+    ClientElement* partner = get_user_by_id(client->GetPartnerName());
+    partner->SetPartnerName("");
+    quick_message(partner, closed_chat_code);
+    client->SetPartnerName("");
+  }
+  connectedClientsBySocket.erase(client_socket);
+  connectedClientsByUsername.erase(username);
+  delete(client);
+  return 0;
+}
+
 int HandleOpCode(Message* message, ClientElement* user){
   int32_t opCode = message->GetOpCode();
   int ret = -1;
@@ -350,11 +466,52 @@ int HandleOpCode(Message* message, ClientElement* user){
       ret = final_auth_message_handler(message, user);
     break;
     }
+    case chat_request_code:{
+      ret = chat_request_handler(message, user);
+    break;
+    }
     case chat_request_accept_code:{
       ret = chat_request_accepted_handler(message, user);
     break;
     }
+    case chat_request_denied_code:{
+      ret = chat_request_denied_handler(message, user);
+    break;
+    }
+    case nonce_msg_code:{
+      ret = message_passthrough(user, message);
+    break;
+    }
+    case first_key_negotiation_code:{
+      ret = message_passthrough(user, message);
+    break;
+    }
+    case second_key_negotiation_code:{
+      ret = message_passthrough(user, message);
+    break;
+    }
+    case peer_message_code:{
+      ret = message_passthrough(user, message);
+    break;
+    }
+    case end_chat_code:{
+      ret = 0;
+      end_chat_handler(user, message);
+    break;
+    }
+    case list_request_code:{
+      ret = list_request_handler(user, message);
+    break;
+    }
+    case logout_code:{
+      ret = 0;
+      close_client_connection(user);
+    break;
+    }
   }
+  // no matter what, the message object is now useless. Deleting it.
+  if(message != NULL)
+    delete(message);
   if(ret != 0){
       fprintf(stderr, "[HandleOpCode][%s] User %s failed.", getName(opCode), strcmp("", user->GetUsername().c_str()) == 0 ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
     return -1;
