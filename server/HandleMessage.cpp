@@ -444,7 +444,6 @@ int close_client_connection(ClientElement *client)
       quick_message(partner, closed_chat_code);
       client->SetPartnerName("");
     }
-    connectedClientsBySocket.erase(client_socket);
     connectedClientsByUsername.erase(username);
     delete(client);
     return 0;
