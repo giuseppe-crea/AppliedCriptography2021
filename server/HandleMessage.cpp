@@ -26,6 +26,22 @@ EVP_PKEY* load_server_private_key(){
   return sv_pr_key;
 }
 
+ClientElement* get_user_by_id(string id){
+    auto tmpIterator = connectedClientsByUsername.find(id);
+    if(tmpIterator != connectedClientsByUsername.end()){
+        return tmpIterator ->second;
+    }
+    else return NULL;
+}
+
+ClientElement* get_user_by_socket(int socket){
+    auto tmpIterator = connectedClientsBySocket.find(socket);
+    if(tmpIterator != connectedClientsBySocket.end()){
+        return tmpIterator ->second;
+    }
+    else return NULL;
+}
+
 int quick_message(ClientElement* target, int opCode){
     // notify partner the chat has been aborted
     Message* reply = new Message();
@@ -220,6 +236,42 @@ int final_auth_message_handler(Message* message, ClientElement* user){
   }
   if(error)
     return 1;
+  return 0;
+}
+
+int chat_request_handler(Message* message, ClientElement* user){
+  unsigned char* data_buffer;
+  int data_buf_len;
+  // open the message->data field, read the user ID within, send that user a "start chat with this user" message
+  if(!message->getData(&data_buffer, &data_buf_len)){
+      fprintf(stderr, "Failed to get data field from message.");
+      return 1;
+  }
+  // ugly conversion to take care of possible non null-terminated array
+  std::string wanna_chat_with_user(reinterpret_cast<char const*>(data_buffer), data_buf_len);
+  ClientElement* contact = get_user_by_id(wanna_chat_with_user);
+  // check if that user exists, if they aren't busy, and if the requesting user isn't busy
+  if(contact != NULL && !contact->isBusy && !user->isBusy){
+      // everything looks alright, we can forward the chat request
+      Message* reply = new Message();
+      int32_t ret = 0;
+      ret =+ reply->SetCounter(contact->GetCounterTo());
+      ret =+ reply->SetOpCode(chat_request_received_code);
+      ret =+ reply->setData(data_buffer, data_buf_len);
+      ret =+ reply->Encode_message(contact->GetSessionKey());
+      if(ret == 0)
+          ret =+ contact->Enqueue_message(reply);
+      if(ret == 0){
+          user->SetPartnerName(contact->GetUsername());
+          contact->SetPartnerName(user->GetUsername());
+      }else{
+        // queueing the  reply message failed! Freeing it and telling the requesting user
+        // this chat non s'ha da fare
+        free(reply);
+        return quick_message(user, chat_request_denied_code);
+      }         
+  }else
+      return quick_message(user, chat_request_denied_code);
   return 0;
 }
 
