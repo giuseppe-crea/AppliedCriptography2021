@@ -524,80 +524,7 @@ int HandleOpCode(Message* message, ClientElement* user){
   return 0;
 }
 
-/* Receive message from peer and handle it with message_handler(). */
-// TODO: Modify this so that it stores everything in a temporary buffer within
-// the user object for as long as the return from recv > 0
-// AS IT STANDS, IF A CLIENT DCS, THIS GETS STUCK ON THE FIRST WHILE LOOP
-int receive_from_peer(ClientElement* user)
-{
-  bool noname = true;
-  bool encrypted = false;
-  // first of all, let's check user for null
-  if(user == NULL)
-    return -1;
-  // the user has been found via socket id; 
-  // we check if they have a user id associated with them
-  if(strcmp(user->GetUsername().c_str(), "") == 0){
-    // this is the first time we interact with this user
-    noname = true;
-  }else{
-    noname = false;
-  }
-
-  int32_t len_to_receive = -1;
-  ssize_t received_count;
-  size_t received_total = 0;
-  // recover the total message size
-  while(received_total<sizeof(int32_t)){
-    received_count = recv(user->GetSocketID(), (char *)&len_to_receive, sizeof(int32_t)-received_total, MSG_DONTWAIT);
-    received_total += received_count;
-  }
-
-  // check the message size sign, to differentiate encrypted messages from unencrypted ones.
-  if(len_to_receive < 0)
-    len_to_receive = -len_to_receive;
-  else
-    encrypted = true;
-
-  if(len_to_receive<2*sizeof(int32_t)){
-    std::printf("Bad message format.\n");
-    return -1;
-  }
-  if(noname)
-    std::printf("[%d] wants to send %d bytes.\n", user->GetSocketID(), len_to_receive);
-  else
-    std::printf("[%s] wants to send %d bytes.\n", user->GetUsername().c_str(), len_to_receive);
-  received_total = 0;
-  unsigned char* buffer = (unsigned char*)calloc(len_to_receive,sizeof(unsigned char));
-  
-  while(received_total < len_to_receive){  //until completely received
-    received_count = recv(user->GetSocketID(), buffer + received_total, len_to_receive -received_total, MSG_DONTWAIT);
-    if (received_count < 0) {
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-          std::printf("[%s] is not ready right now, try again later.\n", user->GetUsername().c_str());
-      }
-      else {
-          string error_message = "["+user->GetUsername()+"] recv() error\n";
-          perror(error_message.c_str());
-          return -1;
-      }
-    } 
-    else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        break;
-    }
-    // If recv() returns 0, it means that peer gracefully shutdown.
-    else if (received_count == 0 && received_total != len_to_receive) {
-        std::printf("[%s] recv() 0 bytes. Peer gracefully shutdown.\n", user->GetUsername().c_str());
-        return -1;
-    }
-    else if (received_count > 0) {
-        received_total += received_count;
-    }
-    else if (received_total == len_to_receive)
-        break;
-  }
-  // MADE IT HERE
-  // At this point we possess the whole message
+int HandleMe(ClientElement* user, bool encrypted, bool noname, unsigned char* buffer, int32_t len_to_receive){
   Message* rcv_msg = new Message();
   if(!encrypted){
     if(!rcv_msg->Unwrap_unencrypted_message(buffer, len_to_receive))
@@ -639,6 +566,158 @@ int receive_from_peer(ClientElement* user)
   }
   // return 0 on success
   return HandleOpCode(rcv_msg, user);
+}
+
+/* Receive message from peer and handle it with message_handler(). */
+// TODO: Modify this so that it stores everything in a temporary buffer within
+// the user object for as long as the return from recv > 0
+// AS IT STANDS, IF A CLIENT DCS, THIS GETS STUCK ON THE FIRST WHILE LOOP
+/*
+int receive_from_peer(ClientElement* user)
+{
+  bool noname = true;
+  bool encrypted = false;
+  // first of all, let's check user for null
+  if(user == NULL)
+    return -1;
+  // the user has been found via socket id; 
+  // we check if they have a user id associated with them
+  if(strcmp(user->GetUsername().c_str(), "") == 0){
+    // this is the first time we interact with this user
+    noname = true;
+  }else{
+    noname = false;
+  }
+
+  int32_t len_to_receive = -1;
+  ssize_t received_count;
+  size_t received_total = 0;
+  size_t cursor = 0;
+  bool size_set = false;
+  unsigned char* buffer;
+  // recover the total message size
+  // check the message size sign, to differentiate encrypted messages from unencrypted ones.
+  
+  do{  //until completely received
+    buffer = (unsigned char*)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
+    received_count = recv(user->GetSocketID(), buffer + received_total, MAX_PAYLOAD_SIZE - received_total, MSG_DONTWAIT);
+    if (received_count < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          std::printf("[%s] is not ready right now, try again later.\n", user->GetUsername().c_str());
+      }
+      else {
+          string error_message = "["+user->GetUsername()+"] recv() error\n";
+          perror(error_message.c_str());
+          return -1;
+      }
+    } 
+    else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        break;
+    }
+    // If recv() returns 0, it means that peer gracefully shutdown.
+    else if (received_count == 0 && received_total != len_to_receive) {
+        std::printf("[%s] recv() 0 bytes. Peer gracefully shutdown.\n", user->GetUsername().c_str());
+        return -1;
+    }
+    else if (received_count > 0) {
+      if( !size_set && received_total > sizeof(int32_t)){
+        size_set = true;
+        memcpy(&len_to_receive, buffer, sizeof(int32_t));
+        cursor = sizeof(int32_t);
+        if(len_to_receive < 0)
+          len_to_receive = -len_to_receive;
+        else
+          encrypted = true;
+
+        if(len_to_receive<2*sizeof(int32_t)){
+          std::printf("Bad message format.\n");
+          return -1;
+        }
+        if(noname)
+          std::printf("[%d] wants to send %d bytes.\n", user->GetSocketID(), len_to_receive);
+        else
+          std::printf("[%s] wants to send %d bytes.\n", user->GetUsername().c_str(), len_to_receive);
+      }
+      if(size_set && received_total >= len_to_receive+sizeof(int32_t)){
+        // we have one full message
+        unsigned char* buffer_msg = (unsigned char*) calloc(len_to_receive,sizeof(unsigned char));
+        memcpy(buffer_msg, buffer+sizeof(int32_t), len_to_receive);
+        memmove(buffer, buffer+len_to_receive+sizeof(int32_t), received_total-len_to_receive-sizeof(int32_t));
+        HandleMe(user, encrypted, noname, buffer_msg, len_to_receive);
+        free(buffer_msg);
+        buffer_msg = NULL;
+        size_set = false;
+        if(received_total == len_to_receive+sizeof(int32_t))
+          break;
+        received_total = received_total-len_to_receive-sizeof(int32_t);
+      }
+    }
+    else if (received_total == len_to_receive)
+        break;
+  } while (received_count > 0);
+  return 0;
+}
+*/
+int receive_from_peer(ClientElement* user){
+  unsigned char* buffer;
+  int total_len, received_count, total_bytes = 0;
+  bool noname = true;
+  bool encrypted = false;
+
+  // first of all, let's check user for null
+  if(user == NULL)
+    return -1;
+  // the user has been found via socket id; 
+  // we check if they have a user id associated with them
+  if(strcmp(user->GetUsername().c_str(), "") == 0){
+    // this is the first time we interact with this user
+    noname = true;
+  }else{
+    noname = false;
+  }
+  while(total_bytes < sizeof(int32_t)){
+    received_count = recv(user->GetSocketID(), &total_len, sizeof(int32_t), 0);
+    total_bytes += received_count;
+    if (received_count < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        printf("peer is not ready right now, try again later.\n");
+      }else {
+        perror("recv() from peer error");
+        return -1;
+      }
+    }else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      return 0;
+    }else if (received_count == 0) {
+      // If recv() returns 0, it means that peer gracefully shutdown. Shutdown client.
+      printf("recv() 0 bytes. Peer gracefully shutdown.\n");
+      return -1;
+    }
+  }
+  buffer = (unsigned char*)calloc(abs(total_len),sizeof(unsigned char));
+  if(total_len > 0)
+    encrypted = true;
+  total_bytes = 0;
+  while(total_bytes < abs(total_len)){
+    received_count = recv(user->GetSocketID(), buffer, abs(total_len), 0);
+    total_bytes += received_count;
+    if (received_count < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        printf("peer is not ready right now, try again later.\n");
+      }else {
+        perror("recv() from peer error");
+        return -1;
+      }
+    }else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      return 0;
+    }else if (received_count == 0) {
+      // If recv() returns 0, it means that peer gracefully shutdown. Shutdown client.
+      printf("recv() 0 bytes. Peer gracefully shutdown.\n");
+      return -1;
+    }
+  }
+  int ret = HandleMe(user, encrypted, noname, buffer, abs(total_len));
+  free(buffer);
+  return ret;
 }
 
 int send_to_peer(ClientElement* user)

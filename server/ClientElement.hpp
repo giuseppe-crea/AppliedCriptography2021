@@ -35,6 +35,8 @@ class ClientElement
 
 	public:
 
+		long current_receiving_byte;
+		unsigned char* receiving_buffer;
 		unsigned char* unsent_buffer;
 		int getUnsentBuffer(unsigned char** buffer);
 		int setUnsentBuffer(unsigned char* buffer, int buffer_dim);

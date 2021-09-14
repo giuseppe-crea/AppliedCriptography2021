@@ -149,9 +149,14 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     int32_t data_size_buffer = buff_len - STATIC_POSTFIX;
     unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer);
     memcpy(data_buffer, buffer+cursor, data_size_buffer);
+    for(int i =0; i < data_size_buffer; i++){
+        cout << (int)data_buffer[i];
+        if(i == data_size_buffer-1)
+            cout << endl;
+    }
     cursor += data_size_buffer;
-    unsigned char* iv_buffer = (unsigned char *)malloc(12);
-    unsigned char* tag_buffer = (unsigned char *)malloc(16);
+    unsigned char* iv_buffer = (unsigned char *)calloc(12,sizeof(unsigned char));
+    unsigned char* tag_buffer = (unsigned char *)calloc(16,sizeof(unsigned char));
     memcpy(tag_buffer, buffer+cursor, 16);
     cursor += 16;
     memcpy(iv_buffer, buffer+cursor, 12);

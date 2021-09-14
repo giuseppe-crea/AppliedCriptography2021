@@ -104,6 +104,11 @@ int32_t Message::Encode_message(unsigned char* key){
         return -1;
     this->ct = (unsigned char*)calloc(this->ct_len, sizeof(unsigned char));
     memcpy(this->ct, tmpCiphertext, this->ct_len);
+    for(int i = 0; i < this->ct_len; i++){
+        printf("%d",(int)tmpCiphertext[i]);
+        if(i == this->ct_len-1)
+            printf("\n");
+    }
     free(tmpCiphertext);
     return 0;
 }
