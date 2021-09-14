@@ -32,9 +32,13 @@ class ClientElement
 		// list of Message elements still to send
 		list<Message*> list_pending_messages;
 
+
 	public:
 
 		unsigned char* unsent_buffer;
+		int getUnsentBuffer(unsigned char** buffer);
+		int setUnsentBuffer(unsigned char* buffer, int buffer_dim);
+		int freeUnsentBuffer();
 		long unsent_bytes;
 		long current_sending_byte;
 		bool isBusy = false;

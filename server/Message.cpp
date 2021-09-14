@@ -92,7 +92,6 @@ int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
         *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char));
         printf("[getData]: Copying into buffer %d bytes.\n", this->data_dim);
         memcpy(*buffer, this->data, this->data_dim);
-        printf("[getData]: \"%s\"\n",this->data);
         return 0;
     }else
         return 1;
@@ -178,36 +177,37 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
 }
 
 // serializes the data to be sent from the fields of Message object
-int32_t Message::SendMessage(unsigned char** buffer){
+int32_t Message::SendMessage(unsigned char** buffer_in){
     int32_t cursor = 0;
     if(encrypted){
         // encrypted message previously encoded
         int32_t totalSize = this->ct_len + STATIC_POSTFIX;
         // init a buffer for the data
-        *buffer = (unsigned char *)malloc(sizeof(int32_t)+16+12+this->ct_len);
+        *buffer_in = (unsigned char *)malloc(sizeof(int32_t)+16+12+this->ct_len);
         // copy size of ciphertext
-        memcpy(buffer, &totalSize, sizeof(int32_t));
+        memcpy(*buffer_in, &totalSize, sizeof(int32_t));
         cursor += sizeof(int32_t);
         // copy ciphertext
-        memcpy(buffer+cursor, this->ct, this->ct_len);
+        memcpy(*buffer_in+cursor, this->ct, this->ct_len);
         cursor += this->ct_len;
         // copy cipthertext tag
-        memcpy(buffer+cursor, this->ct_tag, 16);
+        memcpy(*buffer_in+cursor, this->ct_tag, 16);
         cursor += 16;
         // copy IV
-        memcpy(buffer+cursor, this->iv, 12);
+        memcpy(*buffer_in+cursor, this->iv, 12);
         cursor += 12;
         // cout << "Sending this many bytes of payload total: " << totalSize << endl;
     }else{
         // unencrypted message
         int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
+        unsigned char* buffer_two = (unsigned char *)calloc(-message_dim+sizeof(int32_t), sizeof(unsigned char));
         // init a buffer for the data
-        *buffer = (unsigned char *)malloc(-message_dim+sizeof(int32_t));
-        memcpy(buffer, &message_dim, sizeof(int32_t));
+        *buffer_in = (unsigned char *)calloc(-message_dim+sizeof(int32_t), sizeof(unsigned char));
+        memcpy(*buffer_in, &message_dim, sizeof(int32_t));
         cursor += sizeof(int32_t);
-        memcpy(buffer+cursor, &this->op_code, sizeof(int32_t));
+        memcpy(*buffer_in+cursor, &this->op_code, sizeof(int32_t));
         cursor += sizeof(int32_t);
-        memcpy(buffer+cursor, this->data, this->data_dim);
+        memcpy(*buffer_in+cursor, this->data, this->data_dim);
         cursor += this->data_dim;
     }
     return cursor;

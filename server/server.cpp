@@ -13,8 +13,6 @@
 
 #include "HandleMessage.cpp"
 
-
-
 #define NO_SOCKET -1
 
 using namespace std;
@@ -117,7 +115,6 @@ int build_fd_sets(fd_set *read_fds, fd_set *write_fds, fd_set *except_fds)
   int i;
   
   FD_ZERO(read_fds);
-  FD_SET(STDIN_FILENO, read_fds);
   FD_SET(listen_sock, read_fds);
   map<int, ClientElement*>::iterator it;
   for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); it++)
@@ -125,11 +122,12 @@ int build_fd_sets(fd_set *read_fds, fd_set *write_fds, fd_set *except_fds)
 
   FD_ZERO(write_fds);
   for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); it++)
-    if (it->second->Size_pending_messages() > 0)
+    if (it->second->Size_pending_messages() > 0){
       FD_SET(it->first, write_fds);
+      printf("[build_fd_sets] Added socket #%d\n", it->first);
+    }
   
   FD_ZERO(except_fds);
-  FD_SET(STDIN_FILENO, except_fds);
   FD_SET(listen_sock, except_fds);
   for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); it++)
     FD_SET(it->first, except_fds);
@@ -228,6 +226,7 @@ int main(int argc, char **argv)
         
         map<int, ClientElement*>::iterator it;
         for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); it++){
+          fprintf(stderr, "checking socket number %d", it->first);
           if (FD_ISSET(it->first, &read_fds)) {
             if (receive_from_peer(it->second) != 0) {
               close_client_connection(it->second);
@@ -237,7 +236,10 @@ int main(int argc, char **argv)
   
           if (FD_ISSET(it->first, &write_fds)) {
             if (send_to_peer(it->second) != 0) {
-              close_client_connection(it->second);
+              if(close_client_connection(it->second) == -1){
+                close(it->first);
+                fprintf(stderr, "We really shouldn't be here.\n");  
+              }
               continue;
             }
           }

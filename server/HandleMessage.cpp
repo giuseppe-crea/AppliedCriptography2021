@@ -89,12 +89,12 @@ int first_auth_message_handler(Message* message, ClientElement* user){
     user->SetNonceReceived(nonce_user);
     free(data_buffer);
   }else{
-    fprintf(stderr, "first auth message: getdata");
+    fprintf(stderr, "first auth message: getdata\n");
     free(data_buffer);
     return -1;
   }
   if(user->GenerateKeysForUser()){
-    fprintf(stderr, "DH Key generation failed");
+    fprintf(stderr, "DH Key generation failed\n");
     free(data_buffer);
     return 1;
   }
@@ -186,11 +186,10 @@ int final_auth_message_handler(Message* message, ClientElement* user){
     memcpy(sign, data_buffer + cursor, sign_size);
     // verify signature
     if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceSent(), pem_dim, sign, sign_size)){
-      fprintf(stderr, "[final_auth_msg_code][Signature Verification] %s failed.", user->GetUsername().c_str());
+      fprintf(stderr, "[final_auth_msg_code][Signature Verification] %s failed.\n", user->GetUsername().c_str());
       error = true;
     }
-    // done with the signature, we can clean those buffers up.
-    free(buffer);
+    // done with the signature, we can clean that buffer up.
     free(sign);
     if(!error){
       // run key derivation on this data
@@ -201,10 +200,10 @@ int final_auth_message_handler(Message* message, ClientElement* user){
       EVP_PKEY_derive_init(kd_ctx);
       EVP_PKEY* peer_dh_pubkey = NULL;
       peer_dh_pubkey = PEM_read_bio_PUBKEY(peer_dh_pub_key_bio,NULL,NULL,NULL);
-      BIO_free(peer_dh_pub_key_bio);
+      //BIO_free(peer_dh_pub_key_bio);
       int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
       if(ret == 0){
-        fprintf(stderr, "[final_auth_msg_code][Key derivation] %s failed.", user->GetUsername().c_str());
+        fprintf(stderr, "[final_auth_msg_code][Key derivation] %s failed.\n", user->GetUsername().c_str());
         error = true;
       }
       if(!error){
@@ -236,6 +235,7 @@ int final_auth_message_handler(Message* message, ClientElement* user){
       }
       EVP_PKEY_free(peer_dh_pubkey);
     }
+    free(buffer);
   }
   if(error)
     return 1;
@@ -247,7 +247,7 @@ int chat_request_handler(Message* message, ClientElement* user){
   int data_buf_len;
   // open the message->data field, read the user ID within, send that user a "start chat with this user" message
   if(!message->getData(&data_buffer, &data_buf_len)){
-      fprintf(stderr, "Failed to get data field from message.");
+      fprintf(stderr, "Failed to get data field from message.\n");
       return 1;
   }
   // ugly conversion to take care of possible non null-terminated array
@@ -323,7 +323,7 @@ int chat_request_accepted_handler(Message* message, ClientElement* user){
   int data_buf_len;
   // open the message->data field, read the user ID within, send that user a "start chat with this user" message
   if(!message->getData(&data_buffer, &data_buf_len)){
-    fprintf(stderr, "Failed to get data field from message.");
+    fprintf(stderr, "Failed to get data field from message.\n");
     return 1;
   }
   int ret = 0;
@@ -427,26 +427,29 @@ int list_request_handler(ClientElement* user, Message* message){
 
 int close_client_connection(ClientElement *client)
 {
-  string username = client->GetUsername();
-  int client_socket = client->GetSocketID();
-  if(strcmp(username.c_str(),"") != 0)
-    printf("Close client socket for %s.\n", username.c_str());
-  else
-    printf("Close client socket number %d.\n", client_socket);
-  
-  close(client_socket);
+  if(client != NULL){
+    string username = client->GetUsername();
+    int client_socket = client->GetSocketID();
+    if(strcmp(username.c_str(),"") != 0)
+      printf("Close client socket for %s.\n", username.c_str());
+    else
+      printf("Close client socket number %d.\n", client_socket);
+    
+    close(client_socket);
 
-  // if the client had a partner, we close that chat
-  if(client->isBusy){
-    ClientElement* partner = get_user_by_id(client->GetPartnerName());
-    partner->SetPartnerName("");
-    quick_message(partner, closed_chat_code);
-    client->SetPartnerName("");
+    // if the client had a partner, we close that chat
+    if(client->isBusy){
+      ClientElement* partner = get_user_by_id(client->GetPartnerName());
+      partner->SetPartnerName("");
+      quick_message(partner, closed_chat_code);
+      client->SetPartnerName("");
+    }
+    connectedClientsBySocket.erase(client_socket);
+    connectedClientsByUsername.erase(username);
+    delete(client);
+    return 0;
   }
-  connectedClientsBySocket.erase(client_socket);
-  connectedClientsByUsername.erase(username);
-  delete(client);
-  return 0;
+  return -1;
 }
 
 int HandleOpCode(Message* message, ClientElement* user){
@@ -513,10 +516,10 @@ int HandleOpCode(Message* message, ClientElement* user){
   if(message != NULL)
     delete(message);
   if(ret != 0){
-      fprintf(stderr, "[HandleOpCode][%s] User %s failed.", getName(opCode), strcmp("", user->GetUsername().c_str()) == 0 ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
+      fprintf(stderr, "[HandleOpCode][%d] User %s failed.\n", opCode, strcmp("", user->GetUsername().c_str()) == 0 ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
     return -1;
   }else{
-    printf("[HandleOpCode][%s] User %s done.", getName(opCode), user->GetUsername().c_str());
+    printf("[HandleOpCode][%d] User %s done.\n", opCode, user->GetUsername().c_str());
   }
   return 0;
 }
@@ -540,7 +543,7 @@ int receive_from_peer(ClientElement* user)
     noname = false;
   }
 
-  size_t len_to_receive;
+  int32_t len_to_receive = -1;
   ssize_t received_count;
   size_t received_total = 0;
   // recover the total message size
@@ -560,20 +563,20 @@ int receive_from_peer(ClientElement* user)
     return -1;
   }
   if(noname)
-    std::printf("[%d] wants to send %ld bytes.\n", user->GetSocketID(), len_to_receive);
+    std::printf("[%d] wants to send %d bytes.\n", user->GetSocketID(), len_to_receive);
   else
-    std::printf("[%s] wants to send %ld bytes.\n", user->GetUsername().c_str(), len_to_receive);
+    std::printf("[%s] wants to send %d bytes.\n", user->GetUsername().c_str(), len_to_receive);
   received_total = 0;
   unsigned char* buffer = (unsigned char*)calloc(len_to_receive,sizeof(unsigned char));
   
-  while(received_total <= len_to_receive){  //until completely received
+  while(received_total < len_to_receive){  //until completely received
     received_count = recv(user->GetSocketID(), buffer + received_total, len_to_receive -received_total, MSG_DONTWAIT);
     if (received_count < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
           std::printf("[%s] is not ready right now, try again later.\n", user->GetUsername().c_str());
       }
       else {
-          string error_message = "["+user->GetUsername()+"] recv() error";
+          string error_message = "["+user->GetUsername()+"] recv() error\n";
           perror(error_message.c_str());
           return -1;
       }
@@ -629,7 +632,7 @@ int receive_from_peer(ClientElement* user)
     reply->setData(NULL, 0);
     reply->Encode_message(user->GetSessionKey());
     user->Enqueue_message(reply);
-    printf("[%s] reached MAX_INT on one of its counters, disconnecting them.", noname ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
+    printf("[%s] reached MAX_INT on one of its counters, disconnecting them.\n", noname ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
     return 0;
   }
   // return 0 on success
@@ -643,13 +646,16 @@ int send_to_peer(ClientElement* user)
   size_t len_to_send;
   ssize_t sent_count;
   size_t sent_total = 0;
+  Message* to_send = NULL;
   do {
     // If sending message has completely sent and there are messages in queue, why not send them?
     if (user->current_sending_byte < 0 || user->current_sending_byte >= user->unsent_bytes) {
       // unsent_buffer was successfully sent, let's free it just to be sure
+      if(to_send != NULL)
+        delete(to_send);
       free(user->unsent_buffer);
       // then we can look for messages in the send queue
-      Message* to_send = user->Dequeue_message();
+      to_send = user->Dequeue_message();
       if (to_send == NULL) {
         user->current_sending_byte = -1;
         // nothing left to send
@@ -661,14 +667,14 @@ int send_to_peer(ClientElement* user)
       user->current_sending_byte = 0;
       user->unsent_bytes = len_to_send;
       // at this point we can free the dequeued message
-      delete(to_send);
+      // delete(to_send);
     }
-    
+
     // Count bytes to send.
     len_to_send = user->unsent_bytes - user->current_sending_byte;
     if (len_to_send > MAX_PAYLOAD_SIZE)
       len_to_send = MAX_PAYLOAD_SIZE;
-    
+
     // trying to send len_to_send bytes from unsent_buffer
     sent_count = send(user->GetSocketID(), user->unsent_buffer + user->current_sending_byte, len_to_send, 0);
     if (sent_count < 0) {
@@ -676,7 +682,7 @@ int send_to_peer(ClientElement* user)
         printf("peer is not ready right now, try again later.\n");
       }
       else {
-        perror("send() from peer error");
+        perror("send() from peer error\n");
         return -1;
       }
     }

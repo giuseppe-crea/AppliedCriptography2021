@@ -7,6 +7,7 @@ ClientElement::ClientElement()
 	user_id = "";
     chat_partner_id = "";
     unsent_bytes = 0;
+    current_sending_byte = -1;
 }
 	
 ClientElement::~ClientElement()
@@ -230,4 +231,30 @@ Message* ClientElement::Dequeue_message(){
 
 int ClientElement::Size_pending_messages(){
     return list_pending_messages.size();
+}
+
+// gets us a deep copy of the unsent message buffer
+int ClientElement::getUnsentBuffer(unsigned char** buffer){
+    if(unsent_buffer == NULL)
+        return 1;
+    *buffer = (unsigned char*)calloc(unsent_bytes, sizeof(unsigned char));
+    return 0;
+}
+
+// deep copy into unsent_buffer of client element
+int ClientElement::setUnsentBuffer(unsigned char* buffer, int buffer_dim){
+    if(buffer != NULL){
+        this->unsent_buffer = (unsigned char*)calloc(buffer_dim, sizeof(unsigned char));
+        if(this->unsent_buffer == NULL)
+            return -1;
+        memcpy(this->unsent_buffer, buffer, buffer_dim);
+        unsent_bytes = buffer_dim;
+        return 0;
+    }
+    return -1;
+}
+
+int ClientElement::freeUnsentBuffer(){
+    free(this->unsent_buffer);
+    return 0;
 }
