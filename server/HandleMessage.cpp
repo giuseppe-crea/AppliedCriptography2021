@@ -276,6 +276,63 @@ int chat_request_handler(Message* message, ClientElement* user){
   return 0;
 }
 
+// opCode can either be chat_request_accept_code for the user who initiated the chat request
+// or it can be peer_public_key_msg_code for the user that accepted the chat request
+int send_peer_pubkey(ClientElement* user, int opCode){
+  ClientElement* partner = get_user_by_id(user->GetPartnerName());
+  if(partner == NULL){
+    user->SetPartnerName("");
+    return -1;
+  }
+  Message* reply = new Message();
+  int32_t ret = 0;
+  ret += reply->SetOpCode(opCode);
+  ret += reply->SetCounter(user->GetCounterTo());
+  // the public key must be shared as BIO
+  BIO* pubkey_bio = BIO_new(BIO_s_mem());
+  unsigned char* pubkey_buffer;
+  PEM_write_bio_PUBKEY(pubkey_bio, partner->GetPublicKey());
+  // place it on an unsigned char buffer and get its length
+  long pem_size = BIO_get_mem_data(pubkey_bio, &pubkey_buffer);
+  // concat length + key in an unsigned char buffer
+  unsigned char* send_buffer = (unsigned char*)calloc(pem_size+sizeof(long), sizeof(unsigned char));
+  memcpy(send_buffer,&pem_size, sizeof(long));
+  memcpy(send_buffer+sizeof(long), pubkey_buffer, pem_size);
+  // finally add it to the message
+  ret += reply->setData(send_buffer, pem_size+sizeof(long));
+  ret += reply->Encode_message(user->GetSessionKey());
+  if(ret == 0)
+    // queue the message containing the partner's public key
+    ret += user->Enqueue_message(reply);
+  BIO_free(pubkey_bio);
+  free(send_buffer);
+  if(ret != 0){
+    // an error occurred communicating with Bob, telling Alice the request was denied
+    free(reply);
+    user->SetPartnerName("");
+    return quick_message(user, chat_request_denied_code);
+  }
+  return 0;
+}
+
+int chat_request_accepted_handler(Message* message, ClientElement* user){
+  unsigned char* data_buffer;
+  int data_buf_len;
+  // open the message->data field, read the user ID within, send that user a "start chat with this user" message
+  if(!message->getData(&data_buffer, &data_buf_len)){
+    fprintf(stderr, "Failed to get data field from message.");
+    return 1;
+  }
+  int ret = 0;
+  ClientElement* partner = get_user_by_id(user->GetPartnerName());
+  ret += send_peer_pubkey(user, peer_public_key_msg_code);
+  if(ret == 0)
+    ret += send_peer_pubkey(partner, chat_request_accept_code);
+  else
+    return quick_message(partner, chat_request_denied_code);
+  return 0;
+}
+
 int HandleOpCode(Message* message, ClientElement* user){
   int32_t opCode = message->GetOpCode();
   int ret = -1;
@@ -291,6 +348,10 @@ int HandleOpCode(Message* message, ClientElement* user){
     }
     case final_auth_msg_code:{
       ret = final_auth_message_handler(message, user);
+    break;
+    }
+    case chat_request_accept_code:{
+      ret = chat_request_accepted_handler(message, user);
     break;
     }
   }
