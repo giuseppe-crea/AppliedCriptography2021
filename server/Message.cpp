@@ -170,7 +170,7 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     memcpy(&counter, pt_buffer+cursor, sizeof(int32_t));
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
-    if(!this->setData(pt_buffer+cursor, dataLen-cursor)){
+    if(this->setData(pt_buffer+cursor, dataLen-cursor) != 0){
         return false;
     }
     return true;

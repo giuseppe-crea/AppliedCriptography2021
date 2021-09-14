@@ -615,6 +615,7 @@ int receive_from_peer(ClientElement* user)
     unsigned char* data;
     rcv_msg->getData(&data, &data_dim);
     if(rcv_msg->GetCounter() == user->GetCounterFrom()){
+      user->IncreaseCounterTo();
       std::printf("[%s] Handling encrypted message...\n", user->GetUsername().c_str());
       // TODO: Handle it
       // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
@@ -653,7 +654,7 @@ int send_to_peer(ClientElement* user)
       // unsent_buffer was successfully sent, let's free it just to be sure
       if(to_send != NULL)
         delete(to_send);
-      free(user->unsent_buffer);
+      
       // then we can look for messages in the send queue
       to_send = user->Dequeue_message();
       if (to_send == NULL) {
@@ -699,5 +700,10 @@ int send_to_peer(ClientElement* user)
       sent_total += sent_count;
     }
   } while (sent_count > 0);
+  if(sent_total >= len_to_send){
+    user->IncreaseCounterTo();
+    free(user->unsent_buffer);
+    user->unsent_buffer = NULL;
+  }
   return 0;
 }

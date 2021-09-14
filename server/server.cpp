@@ -226,7 +226,7 @@ int main(int argc, char **argv)
         
         map<int, ClientElement*>::iterator it;
         for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); it++){
-          fprintf(stderr, "checking socket number %d", it->first);
+          fprintf(stderr, "checking socket number %d\n", it->first);
           if (FD_ISSET(it->first, &read_fds)) {
             if (receive_from_peer(it->second) != 0) {
               close_client_connection(it->second);
