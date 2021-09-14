@@ -58,22 +58,6 @@ int setup_signals()
   return 0;
 }
 
-ClientElement* get_user_by_id(string id){
-    auto tmpIterator = connectedClientsByUsername.find(id);
-    if(tmpIterator != connectedClientsByUsername.end()){
-        return tmpIterator ->second;
-    }
-    else return NULL;
-}
-
-ClientElement* get_user_by_socket(int socket){
-    auto tmpIterator = connectedClientsBySocket.find(socket);
-    if(tmpIterator != connectedClientsBySocket.end()){
-        return tmpIterator ->second;
-    }
-    else return NULL;
-}
-
 /* Start listening socket listen_sock. */
 int start_listen_socket(int *listen_sock)
 {

@@ -3,6 +3,7 @@
 #define getName(var)  #var
 
 extern map<string, ClientElement*>connectedClientsByUsername;
+extern map<int, ClientElement*>connectedClientsBySocket;
 
 // functions to handle the loading of keys and certs
 X509* load_server_cert(){
