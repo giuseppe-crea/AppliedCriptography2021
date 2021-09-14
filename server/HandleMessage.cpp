@@ -1,6 +1,8 @@
 #include "ClientElement.cpp"
-#include "../client/constant_variables.cpp"
 #include "signature_utilities.cpp"
+#define getName(var)  #var
+
+extern map<string, ClientElement*>connectedClientsByUsername;
 
 // functions to handle the loading of keys and certs
 X509* load_server_cert(){
@@ -141,8 +143,89 @@ int first_auth_message_handler(Message* message, ClientElement* user){
   return ret;
 }
 
+int final_auth_message_handler(Message* message, ClientElement* user){
+  unsigned char* data_buffer;
+  int data_buf_len;
+  bool error = false;
+  // read the message and place its content in various buffers
+  if(!message->getData(&data_buffer, &data_buf_len)){
+    int32_t cursor = 0;
+    long pem_dim;
+    unsigned int sign_size;
+    // copy the size of the received DH key
+    memcpy(&pem_dim, data_buffer, sizeof(long));
+    cursor += sizeof(long);
+    // allocate a buffer for the DH Key and copy into it
+    unsigned char* buffer = (unsigned char*)calloc(pem_dim, sizeof(unsigned char));
+    memcpy(buffer, data_buffer+cursor, pem_dim);
+    cursor += pem_dim;
+    // size of signature
+    memcpy(&sign_size, data_buffer+ cursor, sizeof(unsigned int));
+    cursor += sizeof(unsigned int);
+    // signature to verify
+    unsigned char* sign = (unsigned char*)calloc(sign_size, sizeof(unsigned char));
+    memcpy(sign, data_buffer + cursor, sign_size);
+    // verify signature
+    if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceSent(), pem_dim, sign, sign_size)){
+      fprintf(stderr, "[final_auth_msg_code][Signature Verification] %s failed.", user->GetUsername().c_str());
+      error = true;
+    }
+    // done with the signature, we can clean those buffers up.
+    free(buffer);
+    free(sign);
+    if(!error){
+      // run key derivation on this data
+      // session key derivation
+      BIO* peer_dh_pub_key_bio = BIO_new(BIO_s_mem());
+      BIO_write(peer_dh_pub_key_bio, buffer, pem_dim);
+      EVP_PKEY_CTX* kd_ctx = EVP_PKEY_CTX_new(user->GetPrivateDHKey(), NULL);
+      EVP_PKEY_derive_init(kd_ctx);
+      EVP_PKEY* peer_dh_pubkey = NULL;
+      peer_dh_pubkey = PEM_read_bio_PUBKEY(peer_dh_pub_key_bio,NULL,NULL,NULL);
+      BIO_free(peer_dh_pub_key_bio);
+      int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
+      if(ret == 0){
+        fprintf(stderr, "[final_auth_msg_code][Key derivation] %s failed.", user->GetUsername().c_str());
+        error = true;
+      }
+      if(!error){
+        // instantiate shared secret
+        unsigned char* secret;
+
+        size_t secret_length;
+        EVP_PKEY_derive(kd_ctx,NULL,&secret_length);
+
+        // deriving
+        secret = (unsigned char*)malloc(secret_length);
+        EVP_PKEY_derive(kd_ctx,secret,&secret_length);
+
+        // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
+        EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
+
+        unsigned char* peer_session_key = (unsigned char*)calloc(32, sizeof(unsigned char));
+        unsigned int peer_session_key_length;
+        EVP_DigestInit(hash_ctx,EVP_sha256());
+        EVP_DigestUpdate(hash_ctx,secret,secret_length);
+        EVP_DigestFinal(hash_ctx, peer_session_key, &peer_session_key_length);
+        // save session key to clientelement object
+        user->SetSessionKey(peer_session_key, peer_session_key_length);
+        // the SetSessionKey makes a copy of the peer session key, it is safe to free the buffers
+        free(peer_session_key);
+        free(secret);
+        EVP_MD_CTX_free(hash_ctx);
+        EVP_PKEY_CTX_free(kd_ctx); 
+      }
+      EVP_PKEY_free(peer_dh_pubkey);
+    }
+  }
+  if(error)
+    return 1;
+  return 0;
+}
+
 int HandleOpCode(Message* message, ClientElement* user){
   int32_t opCode = message->GetOpCode();
+  int ret = -1;
   switch(opCode){
     case -1:{
       // failure to get the opCode
@@ -150,14 +233,19 @@ int HandleOpCode(Message* message, ClientElement* user){
     break;
     }
     case first_auth_msg_code:{
-      if(first_auth_message_handler(message, user) != 0){
-        fprintf(stderr, "[HandleOpCode] First Auth Message for socket %d failed.", user->GetSocketID());
-        return -1;
-      }else{
-        printf("[HandleOpCode][first_auth_message_handler] User %s done.", user->GetUsername().c_str());
-      }
+      ret = first_auth_message_handler(message, user);
     break;
     }
+    case final_auth_msg_code:{
+      ret = final_auth_message_handler(message, user);
+    break;
+    }
+  }
+  if(ret != 0){
+      fprintf(stderr, "[HandleOpCode][%s] User %s failed.", getName(opCode), strcmp("", user->GetUsername().c_str()) == 0 ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
+    return -1;
+  }else{
+    printf("[HandleOpCode][%s] User %s done.", getName(opCode), user->GetUsername().c_str());
   }
   return 0;
 }
@@ -270,7 +358,7 @@ int receive_from_peer(ClientElement* user)
     reply->setData(NULL, 0);
     reply->Encode_message(user->GetSessionKey());
     user->Enqueue_message(reply);
-    printf("[%s] reached MAX_INT on one of its counters, disconnecting them.", noname ? (char*)user->GetSocketID() : user->GetUsername().c_str());
+    printf("[%s] reached MAX_INT on one of its counters, disconnecting them.", noname ? to_string(user->GetSocketID()).c_str() : user->GetUsername().c_str());
     return 0;
   }
   // return 0 on success

@@ -192,6 +192,7 @@ EVP_PKEY* ClientElement::GetPublicKey(){
     return this->public_key;
 }
 
+// Deep copy of session key into user object
 void ClientElement::SetSessionKey(unsigned char* key, int key_len){
     if(key != NULL){
         this->sessionKey = new unsigned char[key_len];

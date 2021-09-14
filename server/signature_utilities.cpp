@@ -1,5 +1,3 @@
-#include "Message.cpp"
-#include "constant_variables.cpp"
 #include <openssl/pem.h>
 #include <openssl/evp.h>
 #include <netinet/in.h>
@@ -7,6 +5,9 @@
 #include <iostream>
 #include <unistd.h>
 #include <fcntl.h>
+
+#include "../client/constant_variables.cpp"
+
 using namespace std;
 
 // signs the plaintext with private key
