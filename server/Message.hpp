@@ -35,6 +35,7 @@ class Message
 		bool Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key);
 		// int SendUnencryptedMessage(int socketID);
 		int GetRealMessageSize();
+		bool isEncrypted();
 
 };
 #endif

@@ -527,6 +527,7 @@ int HandleOpCode(Message* message, ClientElement* user){
 /* Receive message from peer and handle it with message_handler(). */
 // TODO: Modify this so that it stores everything in a temporary buffer within
 // the user object for as long as the return from recv > 0
+// AS IT STANDS, IF A CLIENT DCS, THIS GETS STUCK ON THE FIRST WHILE LOOP
 int receive_from_peer(ClientElement* user)
 {
   bool noname = true;
@@ -615,7 +616,7 @@ int receive_from_peer(ClientElement* user)
     unsigned char* data;
     rcv_msg->getData(&data, &data_dim);
     if(rcv_msg->GetCounter() == user->GetCounterFrom()){
-      user->IncreaseCounterTo();
+      user->IncreaseCounterFrom();
       std::printf("[%s] Handling encrypted message...\n", user->GetUsername().c_str());
       // TODO: Handle it
       // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
@@ -665,6 +666,8 @@ int send_to_peer(ClientElement* user)
       // messages were found in the queue, popping one
       // the SendMessage operation allocates the unsent_buffer element within the user object
       len_to_send = to_send->SendMessage(&user->unsent_buffer);
+      if(to_send->isEncrypted())
+        user->IncreaseCounterTo();
       user->current_sending_byte = 0;
       user->unsent_bytes = len_to_send;
       // at this point we can free the dequeued message
@@ -701,7 +704,6 @@ int send_to_peer(ClientElement* user)
     }
   } while (sent_count > 0);
   if(sent_total >= len_to_send){
-    user->IncreaseCounterTo();
     free(user->unsent_buffer);
     user->unsent_buffer = NULL;
   }

@@ -237,3 +237,7 @@ int Message::GetRealMessageSize(){
     }else
         return sizeof(int32_t)*2 +this->data_dim;
 }
+
+bool Message::isEncrypted(){
+    return encrypted;
+}
