@@ -1,19 +1,25 @@
-#include "client_sending.cpp"
+#include "client_message_queue.cpp"
 #include <sstream>
 using namespace std;
 
 
-int build_fd_sets(int socket,fd_set *read_fds, fd_set *except_fds)
+int build_fd_sets(fd_set *read_fds, fd_set* write_fds, fd_set *except_fds, peer_t *server)
 {
   FD_ZERO(read_fds);
   FD_SET(STDIN_FILENO, read_fds);
-  FD_SET(socket, read_fds);
+  FD_SET(server->socket, read_fds);
   
+  FD_ZERO(write_fds);
+
+  // there is smth to send, set up write_fd for server socket
+  if (server->send_buffer != NULL)
+    FD_SET(server->socket, write_fds);
   
   FD_ZERO(except_fds);
   FD_SET(STDIN_FILENO, except_fds);
-  FD_SET(socket, except_fds);
+  FD_SET(server->socket, except_fds);
   
+  return 0;
   return 0;
 }
 
@@ -50,14 +56,16 @@ int read_from_stdin(char *read_buffer, size_t max_len){
   return len;
 }
 
-void prepare_message(struct session_variables* sessionVariables, int buffer_dim,char* buffer){
+void prepare_message(struct session_variables* sessionVariables, int buffer_dim, char* buffer, peer_t* peer){
     string input_buffer = "";
     input_buffer.insert(buffer_dim,buffer);
     string first_word = input_buffer.substr(0,input_buffer.find(' '));
     cout << first_word << endl;
+
+    Message* msg = NULL;
     //checks if the first word is a command
     if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), list_request_cmd.c_str())==0)
-        send_to_sv(list_request_code, sessionVariables, NULL, 0);
+        prepare_msg_to_server(list_request_code, sessionVariables, NULL, 0, &msg);
     else if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), chat_request_cmd.c_str())==0){
         if(input_buffer.size() < 6)
             perror("You have to insert an id for a user.");
@@ -67,27 +75,29 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
             string recipient = input_buffer.substr(5,input_buffer.find(' '));
             ss << recipient;
             ss >> recipient_id;
-            send_to_sv(chat_request_code, sessionVariables, NULL, 0);
+            prepare_msg_to_server(chat_request_code, sessionVariables, NULL, 0, &msg);
         }
     }
     else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){
-        send_to_sv(logout_code, sessionVariables, NULL, 0);
+        prepare_msg_to_server(logout_code, sessionVariables, NULL, 0, &msg);
         close(sessionVariables->sockfd);
         exit(-2);
     }
     else if (sessionVariables->chatting && strcmp(first_word.c_str(), end_chat_cmd.c_str())==0){
-        send_to_sv(end_chat_code, sessionVariables, NULL, 0);
+        prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg);
        
         sessionVariables->chatting = false;
         
     }
     //there is no command, so if chatting is true it's a message for the peer	
     else if(sessionVariables->chatting)
-        send_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1);
+        prepare_msg_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1, &msg);
+
+    enqueue(&(peer->send_buffer), msg);
 }
 
 
-int handle_read_from_stdin(struct session_variables* sessionVariables)
+int handle_read_from_stdin(struct session_variables* sessionVariables, peer_t* peer)
 {
   char read_buffer[MAX_PAYLOAD_SIZE]; // buffer for stdin
   int len;
@@ -95,7 +105,6 @@ int handle_read_from_stdin(struct session_variables* sessionVariables)
     return -1;
   
   // Create new message and send it.
-  prepare_message(sessionVariables,len,read_buffer);
- 
+  prepare_message(sessionVariables, len, read_buffer, peer);
   return 0;
 }

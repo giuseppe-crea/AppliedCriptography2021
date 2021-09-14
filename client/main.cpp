@@ -1,4 +1,4 @@
-#include "received_msg_handler.cpp"
+#include "msg_handler.cpp"
 
 using namespace std;
 
@@ -47,7 +47,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 
 int main(int argc, char **argv){
    	struct session_variables* sessionVariables = (session_variables*)malloc(sizeof(session_variables));
-	sessionVariables->peer_session_key=NULL;
+	  sessionVariables->peer_session_key=NULL;
     sessionVariables->sv_session_key=NULL;
     sessionVariables->counterAS=0;
     sessionVariables->counterSA=0;
@@ -59,7 +59,10 @@ int main(int argc, char **argv){
     sessionVariables->cl_prvkey=NULL;
     sessionVariables->cl_pubkey=NULL;
 
-    // identification of user
+  peer_t server;
+  memset(&server, 0, sizeof(server));
+
+  // identification of user
 	string cl_id = "alice";
 	string password = "alice";
 	int server_port = 9034;
@@ -94,16 +97,13 @@ int main(int argc, char **argv){
 	int numbytes; 
 	int32_t buf_dim;
 	char* buf;
-	struct sockaddr_in serv_addr;
-    memset(&serv_addr, 0, sizeof(serv_addr));
 	int rv;
 	char s[INET6_ADDRSTRLEN];
 
+  server.address.sin_family = AF_INET;
+	server.address.sin_port = htons(server_port);
 
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(server_port);
-
-	if(inet_pton(AF_INET,"127.0.0.1", &serv_addr.sin_addr)<=0){
+	if(inet_pton(AF_INET,"127.0.0.1", &server.address.sin_addr)<=0){
 		perror("Error in convertion of ip address.");
 		exit(-1);
 	};
@@ -116,9 +116,10 @@ int main(int argc, char **argv){
 		exit(-1);
 	}
 
+  server.socket = sessionVariables->sockfd;
 	cout << "Socket FD initialized" << endl;
 
-	if (connect(sessionVariables->sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
+	if (connect(sessionVariables->sockfd,(struct sockaddr *) &server.address,sizeof(server.address)) < 0){
         perror("ERROR connecting");
 		exit(-1);
 	}
@@ -135,6 +136,7 @@ int main(int argc, char **argv){
     fcntl(STDIN_FILENO, F_SETFL, flag);
 
     fd_set read_fds;
+    fd_set write_fds;
     fd_set except_fds;
 
     int maxfd = sessionVariables->sockfd;
@@ -143,9 +145,9 @@ int main(int argc, char **argv){
 
   while (1) {
     // Select() updates fd_set's, so we need to build fd_set's before each select()call.
-    build_fd_sets(sessionVariables->sockfd, &read_fds, &except_fds);
+    build_fd_sets(&read_fds, &write_fds, &except_fds, &server);
         
-    int activity = select(maxfd + 1, &read_fds, NULL, &except_fds, NULL);
+    int activity = select(maxfd + 1, &read_fds, &write_fds, &except_fds, NULL);
     
     switch (activity) {
       case -1:
@@ -162,9 +164,10 @@ int main(int argc, char **argv){
       default:
         /* All fd_set's should be checked. */
         if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-          if (handle_read_from_stdin(sessionVariables) != 0)
+          if (handle_read_from_stdin(sessionVariables, &server) != 0){
             close(sessionVariables->sockfd); 
             exit(-1);
+          }
         }
 
         if (FD_ISSET(STDIN_FILENO, &except_fds)) {
@@ -174,9 +177,17 @@ int main(int argc, char **argv){
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &read_fds)) {
-          if (received_msg_handler(sessionVariables) != 0)
+          if (received_msg_handler(sessionVariables, &server) != 0){
             close(sessionVariables->sockfd); 
+            exit(-1);}
+          }
+        }
+
+        if (FD_ISSET(server.socket, &write_fds)) {
+          if (sent_message_handler(sessionVariables, &server) != 0){
+            close(sessionVariables->sockfd);
             exit(-1);
+          }
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &except_fds)) {
@@ -184,10 +195,9 @@ int main(int argc, char **argv){
           close(sessionVariables->sockfd); 
             exit(-1);
         }
-    }
     
     printf("And we are still waiting for server or stdin activity. You can type something to send:\n");
-  }
+    }
   
   return 0;
 }

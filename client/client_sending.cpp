@@ -20,7 +20,7 @@ struct session_variables{
 // functions handling different messages
 // function to handle chat request message
 
-void send_to_sv(int32_t opcode, struct session_variables* sessionVariables, unsigned char* data, int32_t data_dim){
+void prepare_msg_to_server(int32_t opcode, struct session_variables* sessionVariables, unsigned char* data, int32_t data_dim, Message** msg){
     // preparing msg to be sent
 
     Message* m = new Message();
@@ -39,14 +39,14 @@ void send_to_sv(int32_t opcode, struct session_variables* sessionVariables, unsi
     if(m->Encode_message(sessionVariables->sv_session_key) != 0)
         perror("ENCODING_ERROR");
     
-
-    if(m->SendMessage(sessionVariables->sockfd,&(sessionVariables->counterAS)) != 0)
-        perror("SENDING_ERROR");
+    *msg = m;
+    /*if(m->SendMessage(sessionVariables->sockfd,&(sessionVariables->counterAS)) != 0)
+        perror("SENDING_ERROR");*/
 
 }
 
 // function that sends message to peer
-void send_to_peer(struct session_variables* sessionVariables,unsigned char* data, int32_t data_dim){
+void prepare_msg_to_peer(struct session_variables* sessionVariables,unsigned char* data, int32_t data_dim, Message** msg){
 
 
     Message* m_to_peer = new Message();
@@ -81,8 +81,10 @@ void send_to_peer(struct session_variables* sessionVariables,unsigned char* data
     cursor += 12;
 
     delete(m_to_peer);
-
-    send_to_sv(peer_message_code,sessionVariables,buffer,buffer_bytes);  
+    
+    Message* m;
+    prepare_msg_to_server(peer_message_code,sessionVariables,buffer,buffer_bytes,&m);  
     sessionVariables->counterAB++;
+    *msg = m;
 
 };

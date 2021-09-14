@@ -1,32 +1,34 @@
 #include "stream_utilities.cpp"
 
 // function to handle message containing the request of a user who wants to chat
-void chat_request_received(unsigned char* data, struct session_variables* sessionVariables){
+void chat_request_received(unsigned char* data, struct session_variables* sessionVariables, Message** m){
     //prints out the name of the user who wants to chat
     cout << "user " << data << " wants to chat, type y/n if accepted or denied";
     string reply;
     bool invalid_answer = true;
+    Message* msg;
     while(invalid_answer){
         cin >> reply;
         // request accepted
         if (strcmp(reply.c_str(),"y")){         
             invalid_answer = false;
         // message with accepted request gets sent
-        send_to_sv(chat_request_accept_code, sessionVariables, NULL, 0);
+        prepare_msg_to_server(chat_request_accept_code, sessionVariables, NULL, 0, &msg);
         } 
         // request denied
         else if (strcmp(reply.c_str(),"n")){   
             invalid_answer = false;
         //message with denied request gets sent
-        send_to_sv(chat_request_denied_code, sessionVariables, NULL, 0);
+        prepare_msg_to_server(chat_request_denied_code, sessionVariables, NULL, 0, &msg);
             
         } else cout << "Error: wrong answer" << endl;
-    }    
+    }
+    *m = msg;
 };
 
 
 //function that handles the accepted request from peer: sends random nonce to start session key negotiation
-void chat_request_accepted(unsigned char* data,struct session_variables* sessionVariables){
+void chat_request_accepted(unsigned char* data,struct session_variables* sessionVariables, Message** m){
 
     if(sessionVariables->chatting){
         perror("You already have an opened chat!");    
@@ -36,14 +38,14 @@ void chat_request_accepted(unsigned char* data,struct session_variables* session
 
     cout << "chat request accepted" << endl;
 
-
-    
     // sends nonce for peer to server
     RAND_bytes((unsigned char*)&(sessionVariables->na), sizeof(int32_t));
     unsigned char* buffer;
     int32_t buffer_dim = sizeof(int32_t);
     memcpy(buffer, &(sessionVariables->na), buffer_dim);
-    send_to_sv(nonce_msg_code, sessionVariables, buffer, buffer_dim);
+    Message* msg = NULL;
+    prepare_msg_to_server(nonce_msg_code, sessionVariables, NULL, 0, &msg);
+    *m = msg;
     free(buffer);    
 
     //stores the public key automatically sent with the accepted chat message
@@ -82,7 +84,7 @@ void peer_public_key_msg(unsigned char* data, EVP_PKEY** peer_public_key){
 }
 
 // function that handles recieved nonce from peer: it generates diffie-hellmann key and sends it to peer
-void nonce_msg(unsigned char* data, struct session_variables* sessionVariables){
+void nonce_msg(unsigned char* data, struct session_variables* sessionVariables, Message** m){
     //gets a nonce in the clear
     int32_t nb;
     memcpy(&nb, data, sizeof(int32_t));
@@ -148,7 +150,9 @@ void nonce_msg(unsigned char* data, struct session_variables* sessionVariables){
     cursor += sizeof(unsigned int);
     memcpy(buffer + cursor, cl_sign, cl_sign_size);
     
-    send_to_sv(first_key_negotiation_code, sessionVariables, buffer, buffer_bytes);
+    Message* msg = NULL;
+    prepare_msg_to_server(first_key_negotiation_code, sessionVariables, buffer, buffer_bytes, &msg);
+    *m = msg;
     free(cl_sign);
     free(buffer);
     free(pt);
@@ -156,7 +160,7 @@ void nonce_msg(unsigned char* data, struct session_variables* sessionVariables){
 };
 
 // function that handles the recieved diffie-hellmann key of the peer and sends a newly generated dh key; it also computes the peer session key
-void first_key_negotiation(unsigned char* data, struct session_variables* sessionVariables){
+void first_key_negotiation(unsigned char* data, struct session_variables* sessionVariables, Message** m){
     //gets the nonce to include in the signature of the reply msg for peer
     int32_t nb;
     int32_t read_dim = 0;
@@ -249,7 +253,9 @@ void first_key_negotiation(unsigned char* data, struct session_variables* sessio
     cursor += sizeof(unsigned int);
     memcpy(buffer + cursor, cl_sign, cl_sign_size);
     
-    send_to_sv(second_key_negotiation_code, sessionVariables, buffer, buffer_bytes);
+    Message* msg = NULL;
+    prepare_msg_to_server(second_key_negotiation_code, sessionVariables, buffer, buffer_bytes, &msg);
+    *m = msg;
     free(cl_sign);
     free(buffer);
 
