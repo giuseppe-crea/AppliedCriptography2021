@@ -1,3 +1,4 @@
+//#include "global.h"
 #include "ClientElement.cpp"
 #include "signature_utilities.cpp"
 #define getName(var)  #var
@@ -28,7 +29,7 @@ EVP_PKEY* load_server_private_key(){
 }
 
 ClientElement* get_user_by_id(string id){
-    auto tmpIterator = connectedClientsByUsername.find(id);
+    map<string, ClientElement*>::iterator tmpIterator = connectedClientsByUsername.find(id);
     if(tmpIterator != connectedClientsByUsername.end()){
         return tmpIterator ->second;
     }
@@ -36,7 +37,7 @@ ClientElement* get_user_by_id(string id){
 }
 
 ClientElement* get_user_by_socket(int socket){
-    auto tmpIterator = connectedClientsBySocket.find(socket);
+    map<int, ClientElement*>::iterator tmpIterator = connectedClientsBySocket.find(socket);
     if(tmpIterator != connectedClientsBySocket.end()){
         return tmpIterator ->second;
     }

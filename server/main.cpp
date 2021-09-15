@@ -21,8 +21,8 @@
 #define SERVER_IPV4_ADDR "127.0.0.1"
 #define PORT 9034   // port we're listening on
 // two maps that point to the same clientelement objects
-std::map<int, ClientElement*> connectedClientsBySocket;
-std::map<std::string, ClientElement*> connectedClientsByUsername;
+//std::map<int, ClientElement*> connectedClientsBySocket;
+//std::map<std::string, ClientElement*> connectedClientsByUsername;
 
 // returns the length of the allocated buffer
 // inserts all active clients, separated by null terminator
