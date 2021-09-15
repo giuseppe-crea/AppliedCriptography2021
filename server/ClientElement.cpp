@@ -8,11 +8,42 @@ ClientElement::ClientElement()
     chat_partner_id = "";
     unsent_bytes = 0;
     current_sending_byte = -1;
+    pri_dh_key = NULL;
 }
 	
 ClientElement::~ClientElement()
 {
-	
+	free(sessionKey);
+    free(pub_dh_key_to_send);
+    free(unsent_buffer);
+    if(peer_dh_pubkey_pem != NULL){
+        BIO_free(peer_dh_pubkey_pem);
+        peer_dh_pubkey_pem = NULL;
+    }
+    if(pub_dh_key_received != NULL){
+        BIO_free(pub_dh_key_received);
+        pub_dh_key_received = NULL;
+    }
+    if(pub_dh_key != NULL){
+        EVP_PKEY_free(pub_dh_key);
+        pub_dh_key = NULL;
+    }
+    if(pri_dh_key != NULL){
+        EVP_PKEY_free(pri_dh_key);
+        pri_dh_key = NULL;
+    }
+    if(public_key != NULL){
+        EVP_PKEY_free(public_key);
+        public_key = NULL;
+    }
+    if(!list_pending_messages.empty()){
+        list<Message*>::iterator it;
+        for(it = list_pending_messages.begin(); it != list_pending_messages.end(); ){
+            delete(*it);
+            list_pending_messages.erase(it++);
+        }
+        list_pending_messages.clear();
+    }
 }
 
 bool ClientElement::CounterSizeCheck(){

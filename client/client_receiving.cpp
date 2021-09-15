@@ -3,25 +3,29 @@
 // function to handle message containing the request of a user who wants to chat
 void chat_request_received(unsigned char* data, struct session_variables* sessionVariables, Message** m){
     //prints out the name of the user who wants to chat
-    cout << "user " << data << " wants to chat, type y/n if accepted or denied";
+    cout << "user " << data << " wants to chat, type y/n if accepted or denied" << endl;
     string reply;
     bool invalid_answer = true;
     Message* msg;
     while(invalid_answer){
-        cin >> reply;
+        cin.clear();
+        fflush(stdin);
+        getline (std::cin,reply);
         // request accepted
-        if (strcmp(reply.c_str(),"y")){         
+        if (strcmp(reply.c_str(),"y") == 0){         
             invalid_answer = false;
-        // message with accepted request gets sent
-        prepare_msg_to_server(chat_request_accept_code, sessionVariables, NULL, 0, &msg);
+            // message with accepted request gets sent
+            cout << "Starting chat with other user." << endl;
+            prepare_msg_to_server(chat_request_accept_code, sessionVariables, NULL, 0, &msg);
         } 
         // request denied
-        else if (strcmp(reply.c_str(),"n")){   
+        else if (strcmp(reply.c_str(),"n") == 0){   
             invalid_answer = false;
-        //message with denied request gets sent
-        prepare_msg_to_server(chat_request_denied_code, sessionVariables, NULL, 0, &msg);
-            
-        } else cout << "Error: wrong answer" << endl;
+            //message with denied request gets sent
+            cout << "Refused to chat with other user." << endl;
+            prepare_msg_to_server(chat_request_denied_code, sessionVariables, NULL, 0, &msg);  
+        }else if (strcmp(reply.c_str(), "") != 0) 
+            cout << "Error: wrong answer" << endl;
     }
     *m = msg;
 };
@@ -41,10 +45,11 @@ void chat_request_accepted(unsigned char* data,struct session_variables* session
     // sends nonce for peer to server
     RAND_bytes((unsigned char*)&(sessionVariables->na), sizeof(int32_t));
     unsigned char* buffer;
+    buffer = (unsigned char*)calloc(sizeof(int32_t), sizeof(unsigned char));
     int32_t buffer_dim = sizeof(int32_t);
     memcpy(buffer, &(sessionVariables->na), buffer_dim);
     Message* msg = NULL;
-    prepare_msg_to_server(nonce_msg_code, sessionVariables, NULL, 0, &msg);
+    prepare_msg_to_server(nonce_msg_code, sessionVariables, buffer, buffer_dim, &msg);
     *m = msg;
     free(buffer);    
 
@@ -52,8 +57,8 @@ void chat_request_accepted(unsigned char* data,struct session_variables* session
     int pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
     memcpy(&pem_dim, data, sizeof(int32_t));
-    buffer = new unsigned char[pem_dim];
-    memcpy(&buffer, data+sizeof(int32_t), pem_dim);
+    buffer = (unsigned char*)calloc(pem_dim, sizeof(unsigned char));
+    memcpy(buffer, data+sizeof(int32_t), pem_dim);
     BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
 
     sessionVariables->peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem,NULL,NULL,NULL);
@@ -75,9 +80,9 @@ void peer_public_key_msg(unsigned char* data, EVP_PKEY** peer_public_key){
     int pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
     memcpy(&pem_dim, data, sizeof(int32_t));
-    char * buffer = new char[pem_dim];
-    memcpy(&buffer, data+sizeof(int32_t), pem_dim);
-    BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
+    unsigned char * buffer = (unsigned char*)calloc(pem_dim, sizeof(unsigned char));
+    memcpy(buffer, data+sizeof(int32_t), pem_dim);
+    int ret = BIO_write(peer_pub_key_pem, data+sizeof(int32_t), pem_dim);
     free(buffer);
 
     *peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem,NULL,NULL,NULL);

@@ -32,6 +32,7 @@ EVP_PKEY* load_server_private_key(){
 
 ClientElement* get_user_by_id(string id){
     map<string, ClientElement*>::iterator tmpIterator = connectedClientsByUsername.find(id);
+    /*
     map<string, ClientElement*>::iterator it;
     for(it = connectedClientsByUsername.begin(); it != connectedClientsByUsername.end(); it++){
       cout << "Comparing key:\""<< it->first << "\" with id:\"" << id << "\": " << it->first.compare(id) << endl;;
@@ -50,6 +51,7 @@ ClientElement* get_user_by_id(string id){
           cout << endl;
       }
     }
+    */
     if(tmpIterator != connectedClientsByUsername.end()){
         return tmpIterator ->second;
     }
@@ -275,6 +277,11 @@ int chat_request_handler(Message* message, ClientElement* user){
   std::string wanna_chat_with_user(reinterpret_cast<char const*>(data_buffer), data_buf_len-1);
   // wanna_chat_with_user.erase(remove_if(wanna_chat_with_user.begin(), wanna_chat_with_user.end(), isspace), wanna_chat_with_user.end());
   ClientElement* contact = get_user_by_id(wanna_chat_with_user);
+  // placing user's username in data buffer
+  free(data_buffer);
+  data_buf_len = user->GetUsername().size();
+  data_buffer = (unsigned char* )calloc(data_buf_len, sizeof(unsigned char));
+  memcpy(data_buffer, user->GetUsername().c_str(), data_buf_len);
   // check if that user exists, if they aren't busy, and if the requesting user isn't busy
   if(contact != NULL && !contact->isBusy && !user->isBusy){
       // everything looks alright, we can forward the chat request
