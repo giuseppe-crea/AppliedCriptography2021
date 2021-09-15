@@ -87,6 +87,12 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg);
        
         sessionVariables->chatting = false;
+        sessionVariables->counterAB = 0;
+        sessionVariables->counterBA = 0;
+        EVP_PKEY_free(sessionVariables->peer_public_key);
+        sessionVariables->peer_public_key = NULL;
+        free(sessionVariables->peer_session_key);
+        sessionVariables->peer_session_key = NULL;
         
     }
     //there is no command, so if chatting is true it's a message for the peer	

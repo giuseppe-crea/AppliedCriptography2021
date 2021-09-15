@@ -329,6 +329,7 @@ int send_peer_pubkey(ClientElement* user, int opCode){
   unsigned char* send_buffer = (unsigned char*)calloc(pem_size+sizeof(long), sizeof(unsigned char));
   memcpy(send_buffer,&pem_size, sizeof(long));
   memcpy(send_buffer+sizeof(long), pubkey_buffer, pem_size);
+
   // finally add it to the message
   ret += reply->setData(send_buffer, pem_size+sizeof(long));
   ret += reply->Encode_message(user->GetSessionKey());

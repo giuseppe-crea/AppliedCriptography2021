@@ -58,6 +58,8 @@ int main(int argc, char **argv){
     sessionVariables->chatting=false;
     sessionVariables->cl_prvkey=NULL;
     sessionVariables->cl_pubkey=NULL;
+    sessionVariables->peer_public_key=NULL;
+    sessionVariables->cl_dh_prvkey=NULL;
 
   peer_t server;
   memset(&server, 0, sizeof(server));

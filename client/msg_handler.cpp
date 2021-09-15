@@ -63,12 +63,12 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
       Message* m = NULL;
       switch(peer->receiving_msg->GetOpCode()){
           case chat_request_received_code:
-          chat_request_received(data, sessionVariables, &m);
+          chat_request_received(data, data_dim, sessionVariables, &m);
           enqueue(&(peer->send_buffer), m);
           break;
 
           case chat_request_accept_code: // from server message 4 to alice
-          chat_request_accepted(data, sessionVariables, &m);
+          chat_request_accepted(data, data_dim, sessionVariables, &m);
           enqueue(&(peer->send_buffer), m);
           break;
 
@@ -77,25 +77,25 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
           break;
 
           case peer_public_key_msg_code: // from server message 4 to bob
-          peer_public_key_msg(data,&(sessionVariables->peer_public_key));
+          peer_public_key_msg(data, data_dim, &(sessionVariables->peer_public_key));
           break;
 
           case nonce_msg_code: // receiving 6
-          nonce_msg(data, sessionVariables, &m);
+          nonce_msg(data, data_dim, sessionVariables, &m);
           enqueue(&(peer->send_buffer), m);
           break;
 
           case first_key_negotiation_code: // receiving 8
-          first_key_negotiation(data, sessionVariables, &m);
+          first_key_negotiation(data, data_dim, sessionVariables, &m);
           enqueue(&(peer->send_buffer), m);
           break;
 
           case second_key_negotiation_code: // receiving 10
-          second_key_negotiation(data, sessionVariables);
+          second_key_negotiation(data, data_dim, sessionVariables);
           break;
 
           case closed_chat_code:
-          closed_chat(&sessionVariables->chatting);
+          closed_chat(sessionVariables);
           break;
 
           case forced_logout_code:
