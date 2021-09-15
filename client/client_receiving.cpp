@@ -63,13 +63,13 @@ void chat_request_accepted(unsigned char* data, int data_dim, struct session_var
     buffer = (unsigned char*)calloc(pem_dim, sizeof(unsigned char));
     memcpy(buffer, data+sizeof(long), pem_dim);
 
-    BIO_write(peer_pub_key_pem,(void*)buffer,pem_dim);
+    int ret = BIO_write(peer_pub_key_pem, buffer,pem_dim);
 
     if(data_dim != pem_dim+sizeof(long))
         printf("Bad data!!\n");
-
-    PEM_read_bio_PUBKEY(peer_pub_key_pem, &(sessionVariables->peer_public_key), 0, NULL);
-    
+    if(pem_dim != ret)
+        printf("Failed to properly read the BIO.\n");
+    sessionVariables->peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem, NULL, NULL, NULL);
     sessionVariables->chatting = true;
 
 };
@@ -91,13 +91,13 @@ void peer_public_key_msg(unsigned char* data, int data_dim, EVP_PKEY** peer_publ
     memcpy(buffer, data+sizeof(long), pem_dim);
     cout << "Printing pubkey received." << endl;
 
-    int ret = BIO_write(peer_pub_key_pem, data+sizeof(long), pem_dim);
+    int ret = BIO_write(peer_pub_key_pem, buffer, pem_dim);
     free(buffer);
 
     if(data_dim != pem_dim+sizeof(long))
         printf("Bad data!!\n");
 
-    PEM_read_bio_PUBKEY(peer_pub_key_pem, peer_public_key, 0, NULL);
+    *peer_public_key = PEM_read_bio_PUBKEY(peer_pub_key_pem, NULL, NULL, NULL);
 }
 
 // function that handles recieved nonce from peer: it generates diffie-hellmann key and sends it to peer
