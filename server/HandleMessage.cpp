@@ -71,7 +71,7 @@ int first_auth_message_handler(Message* message, ClientElement* user){
   unsigned char* data_buffer;
   int data_buf_len;
   int32_t nonce_user;
-  if(!message->getData(&data_buffer, &data_buf_len)){
+  if(message->getData(&data_buffer, &data_buf_len) == 0){
     // copy sizeof(int32_t) bytes from buffer to nonce
     memcpy(&nonce_user, data_buffer, sizeof(int32_t));
     
@@ -167,7 +167,7 @@ int final_auth_message_handler(Message* message, ClientElement* user){
   int data_buf_len;
   bool error = false;
   // read the message and place its content in various buffers
-  if(!message->getData(&data_buffer, &data_buf_len)){
+  if(message->getData(&data_buffer, &data_buf_len) == 0){
     int32_t cursor = 0;
     long pem_dim;
     unsigned int sign_size;
@@ -246,7 +246,7 @@ int chat_request_handler(Message* message, ClientElement* user){
   unsigned char* data_buffer;
   int data_buf_len;
   // open the message->data field, read the user ID within, send that user a "start chat with this user" message
-  if(!message->getData(&data_buffer, &data_buf_len)){
+  if(message->getData(&data_buffer, &data_buf_len) != 0){
       fprintf(stderr, "Failed to get data field from message.\n");
       return 1;
   }
@@ -322,7 +322,7 @@ int chat_request_accepted_handler(Message* message, ClientElement* user){
   unsigned char* data_buffer;
   int data_buf_len;
   // open the message->data field, read the user ID within, send that user a "start chat with this user" message
-  if(!message->getData(&data_buffer, &data_buf_len)){
+  if(message->getData(&data_buffer, &data_buf_len) != 0){
     fprintf(stderr, "Failed to get data field from message.\n");
     return 1;
   }

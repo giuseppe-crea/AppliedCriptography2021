@@ -53,12 +53,12 @@ int read_from_stdin(char *read_buffer, size_t max_len){
   
   printf("Read from stdin %ld bytes. Let's prepare message to send.\n", strlen(read_buffer));
 
-  return len;
+  return strlen(read_buffer);
 }
 
 void prepare_message(struct session_variables* sessionVariables, int buffer_dim, char* buffer, peer_t* peer){
     string input_buffer = "";
-    input_buffer.insert(buffer_dim,buffer);
+    input_buffer.append(buffer, buffer_dim);
     string first_word = input_buffer.substr(0,input_buffer.find(' '));
     cout << first_word << endl;
 
@@ -72,10 +72,10 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         else{
             string recipient_id;
             stringstream ss;
-            string recipient = input_buffer.substr(5,input_buffer.find(' '));
+            string recipient = input_buffer.substr(6,input_buffer.find(' '));
             ss << recipient;
             ss >> recipient_id;
-            prepare_msg_to_server(chat_request_code, sessionVariables, NULL, 0, &msg);
+            prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size()+1, &msg);
         }
     }
     else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){
@@ -101,9 +101,11 @@ int handle_read_from_stdin(struct session_variables* sessionVariables, peer_t* p
 {
   char read_buffer[MAX_PAYLOAD_SIZE]; // buffer for stdin
   int len;
-  if (len = read_from_stdin(read_buffer, MAX_PAYLOAD_SIZE) <= 0)
+  len = read_from_stdin(read_buffer, MAX_PAYLOAD_SIZE);
+  if (len <= 0)
     return -1;
   
+  int buffer_size = strlen(read_buffer);
   // Create new message and send it.
   prepare_message(sessionVariables, len, read_buffer, peer);
   return 0;

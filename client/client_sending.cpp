@@ -32,7 +32,7 @@ void prepare_msg_to_server(int32_t opcode, struct session_variables* sessionVari
     if(m->SetCounter(sessionVariables->counterAS) != 0)
         perror("COUNTER_ERROR");
     if(data!=NULL) 
-	    if(!m->setData(data,data_dim))
+	    if(m->setData(data,data_dim) != 0)
             perror("DATA_ERROR");
 
     // encrypts and sends  the message

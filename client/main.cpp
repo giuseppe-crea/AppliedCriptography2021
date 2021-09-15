@@ -63,13 +63,13 @@ int main(int argc, char **argv){
   memset(&server, 0, sizeof(server));
 
   // identification of user
-	string cl_id = "alice";
-	string password = "alice";
+	string cl_id = "";
+	string password = "";
 	int server_port = 9034;
-	//cout << "Who are you?" << endl;
-	//cin >> cl_id;
-	//cout << "Please insert password" << endl;
-	//cin >> password;
+	cout << "Who are you?" << endl;
+	cin >> cl_id;
+	cout << "Please insert password" << endl;
+	cin >> password;
 	//cout << "Please insert server port" << endl;
 	//cin >> server_port;
 	//cout << "Enter the server's address:" << endl;
