@@ -31,7 +31,7 @@ int read_from_stdin(char *read_buffer, size_t max_len){
     do  {
         read_count = read(STDIN_FILENO, read_buffer, max_len-total_read);
         if (read_count < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            perror("read()");
+            printf("Error in read() from stdin.\n");
             return -1;
         }
         else if (read_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
@@ -46,14 +46,18 @@ int read_from_stdin(char *read_buffer, size_t max_len){
             }
         }
     } while (read_count > 0);
-  
-  size_t len = strlen(read_buffer);
-  if (len > 0 && read_buffer[len - 1] == '\n')
-    read_buffer[len - 1] = '\0';
-  
-  printf("Read from stdin %ld bytes. Let's prepare message to send.\n", strlen(read_buffer));
 
-  return strlen(read_buffer);
+    size_t len = strlen(read_buffer);
+    if (len > 0 && read_buffer[len - 1] == '\n')
+        read_buffer[len - 1] = '\0';
+    else{
+        read_buffer[len] = '\0';
+        len++;
+    }
+
+    printf("Read from stdin %ld bytes. Let's prepare message to send.\n", strlen(read_buffer));
+
+    return len;
 }
 
 void prepare_message(struct session_variables* sessionVariables, int buffer_dim, char* buffer, peer_t* peer){
@@ -62,29 +66,30 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
     string first_word = input_buffer.substr(0,input_buffer.find(' '));
     cout << first_word << endl;
 
+    bool ret;
     Message* msg = NULL;
     //checks if the first word is a command
     if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), list_request_cmd.c_str())==0)
-        prepare_msg_to_server(list_request_code, sessionVariables, NULL, 0, &msg);
+        ret = prepare_msg_to_server(list_request_code, sessionVariables, NULL, 0, &msg);
     else if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), chat_request_cmd.c_str())==0){
         if(input_buffer.size() < 6)
-            perror("You have to insert an id for a user.");
+            printf("You have to insert an id for a user.\n");
         else{
             string recipient_id;
             stringstream ss;
             string recipient = input_buffer.substr(6,input_buffer.find(' '));
             ss << recipient;
             ss >> recipient_id;
-            prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size()+1, &msg);
+            ret = prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size()+1, &msg);
         }
     }
     else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){
-        prepare_msg_to_server(logout_code, sessionVariables, NULL, 0, &msg);
+        ret = prepare_msg_to_server(logout_code, sessionVariables, NULL, 0, &msg);
         close(sessionVariables->sockfd);
         exit(-2);
     }
     else if (sessionVariables->chatting && strcmp(first_word.c_str(), end_chat_cmd.c_str())==0){
-        prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg);
+        ret = prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg);
        
         sessionVariables->chatting = false;
         sessionVariables->counterAB = 0;
@@ -97,11 +102,11 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
     }
     //there is no command, so if chatting is true it's a message for the peer	
     else if(sessionVariables->chatting)
-        prepare_msg_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1, &msg);
+        ret = prepare_msg_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1, &msg);
 
-    enqueue(&(peer->send_buffer), msg);
+    if(ret)
+        enqueue(&(peer->send_buffer), msg);
 }
-
 
 int handle_read_from_stdin(struct session_variables* sessionVariables, peer_t* peer)
 {

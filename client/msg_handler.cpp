@@ -15,8 +15,11 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
   int32_t nbytes = recv(peer->socket, (unsigned char*) &buffer_size, sizeof(int32_t), MSG_DONTWAIT);
 
   // checks if the starting of a message has been received, otherwise moves on
-  if (nbytes < sizeof(int32_t))
-    return -2;
+  if (nbytes < sizeof(int32_t)){
+      printf("ERROR: the received message is incomplete.\n");
+      return -2;
+  }
+    
   
   // receiving the message
   printf("Let's try to recv() %d bytes... ", buffer_size);
@@ -29,7 +32,7 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
       printf("peer is not ready right now, try again later.\n");
     }
     else {
-      perror("recv() from peer error");
+      printf("recv() from peer error\n");
       return -1;
     }
   } 
@@ -50,6 +53,9 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
 
   peer->receiving_msg = new Message();
   peer->receiving_msg->Decode_message(buffer, buffer_size, sessionVariables->sv_session_key);
+
+  free(buffer);
+
   int data_dim;
   unsigned char* data = peer->receiving_msg->getData(&data_dim);
 
@@ -63,13 +69,13 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
       Message* m = NULL;
       switch(peer->receiving_msg->GetOpCode()){
           case chat_request_received_code:
-          chat_request_received(data, data_dim, sessionVariables, &m);
-          enqueue(&(peer->send_buffer), m);
+          if(chat_request_received(data, data_dim, sessionVariables, &m))
+            enqueue(&(peer->send_buffer), m);
           break;
 
           case chat_request_accept_code: // from server message 4 to alice
-          chat_request_accepted(data, data_dim, sessionVariables, &m);
-          enqueue(&(peer->send_buffer), m);
+          if(chat_request_accepted(data, data_dim, sessionVariables, &m))
+            enqueue(&(peer->send_buffer), m);
           break;
 
           case chat_request_denied_code:
@@ -77,17 +83,17 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
           break;
 
           case peer_public_key_msg_code: // from server message 4 to bob
-          peer_public_key_msg(data, data_dim, &(sessionVariables->peer_public_key));
+          peer_public_key_msg(data, data_dim, sessionVariables);
           break;
 
           case nonce_msg_code: // receiving 6
-          nonce_msg(data, data_dim, sessionVariables, &m);
-          enqueue(&(peer->send_buffer), m);
+          if(nonce_msg(data, data_dim, sessionVariables, &m))
+            enqueue(&(peer->send_buffer), m);
           break;
 
           case first_key_negotiation_code: // receiving 8
-          first_key_negotiation(data, data_dim, sessionVariables, &m);
-          enqueue(&(peer->send_buffer), m);
+          if(first_key_negotiation(data, data_dim, sessionVariables, &m))
+            enqueue(&(peer->send_buffer), m);
           break;
 
           case second_key_negotiation_code: // receiving 10
@@ -110,6 +116,8 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
           peer_message_received(data, data_dim, sessionVariables);
           break;
       }
+      delete(peer->receiving_msg);
+      peer->receiving_msg = NULL;
   }
   //error if the counter of received messages from server and the counter stored in the message don't correspond
   else {

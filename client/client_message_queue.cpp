@@ -35,6 +35,7 @@ int enqueue(struct message_queue **queue, Message* msg)
   struct message_queue* next_element = (struct message_queue*) calloc(sizeof(struct message_queue), sizeof(unsigned char));
   
   if(next_element == NULL){
+    printf("Error in enqueueing the message.\n");
     return -1;
   }
 

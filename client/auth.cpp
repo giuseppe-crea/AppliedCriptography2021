@@ -8,11 +8,12 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	int32_t na;
 	RAND_bytes((unsigned char*)&na, sizeof(int32_t));
 	printf("My nonce to be sent is: %d\n", na);
+
 	//creates first message for authentication
 	Message* first_m = new Message();
 	unsigned char* buffer;
 	int32_t buffer_bytes = sizeof(int32_t)+cl_id.size()+1;
-	buffer = new unsigned char[buffer_bytes];
+	buffer = (unsigned char*)calloc(buffer_bytes,sizeof(unsigned char));
 	memcpy(buffer, &na, sizeof(int32_t));
 	memcpy(buffer+sizeof(int32_t), cl_id.c_str(), cl_id.size()+1);
 	first_m->setData(buffer, buffer_bytes);
@@ -20,10 +21,10 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	//sends newly created message with opcode, nonce, and client id
 	int32_t ret = first_m->SendUnencryptedMessage(sockfd);
 	if(ret == -1){
-		perror("AUTHENTICATION");
+		printf("Error in AUTHENTICATION: impossible to send first authentication message.\n");
 		exit(-1);
 	}
-	cout << "CHECK 1 in auth" << endl;
+	cout << "CHECK 1 in auth: first authentication message sent." << endl;
 	free(buffer);
 	delete(first_m);
 
@@ -32,25 +33,29 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	int32_t nbytes;
 	nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
 	if(nbytes != sizeof(int32_t) || buffer_bytes > 0){
-		perror("AUTHENTICATION");
+		printf("Error in AUTHENTICATION: impossible to read the dimension of the second authentication message.\n");
 		exit(-1);
 	}
-	cout << "CHECK 2 in auth" << endl;
-	buffer = new unsigned char[-buffer_bytes];
+	cout << "CHECK 2 in auth: received dimension of second authentication message." << endl;
+	buffer = (unsigned char*)calloc(-buffer_bytes,sizeof(unsigned char));
 	cout << buffer_bytes << endl;
 	nbytes = recv(sockfd, buffer, -buffer_bytes, 0);
 	if(nbytes != -buffer_bytes){
-		perror("AUTHENTICATION");
+		printf("Error in AUTHENTICATION: impossible to read the whole second authentication message.\n");
 		exit(-1);
 	}
-	cout << "CHECK 3 in auth" << endl;
+	cout << "CHECK 3 in auth: received the whole second authentication message." << endl;
 	Message* second_m = new Message();
 	second_m->Unwrap_unencrypted_message(buffer, -buffer_bytes);
+
+	free(buffer);
+
 	if(second_m->GetOpCode() != second_auth_msg_code){
-		perror("AUTHENTICATION");
+		printf("Error in AUTHENTICATION: the message received is not a second authentication message.\n");
 		exit(-1);
 	}
-	cout << "CHECK 4 in auth" << endl;
+
+	cout << "CHECK 4 in auth: received second authentication message." << endl;
 	//saves certificate from the server
 	unsigned char* sv_sign;
 	long sv_pem_size;
@@ -63,8 +68,8 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	int sign_size;
 	X509* serv_cert = NULL;
 
-	free(buffer);
-	cout << "CHECK 5 in auth" << endl;
+	
+	cout << "CHECK 5 in auth: no errors in declaring BIO objects." << endl;
 	buffer = second_m->getData(&buffer_bytes);
 	long read_dim = 0; // counts the number of bytes read from message
 
@@ -75,7 +80,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	read_dim += sizeof(long);
 	cout << "Server pem size: " << sv_pem_size << endl;
 	BIO_write(sv_pem, buffer + read_dim, sv_pem_size);
-	unsigned char* new_pem_buffer = new unsigned char[sv_pem_size];
+	unsigned char* new_pem_buffer = (unsigned char*)calloc(sv_pem_size,sizeof(unsigned char));
 	memcpy(new_pem_buffer, buffer+read_dim, sv_pem_size);
 	cout << "Server Pem read" << endl;
 	for(int ieti = 0; ieti < sv_pem_size ; ieti++){
@@ -93,7 +98,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	memcpy(&sign_size, buffer + read_dim, sizeof(int32_t));
 	read_dim += sizeof(int32_t);
 	cout << "Signature size: " << sign_size << endl;
-	sv_sign = (unsigned char*)malloc(sign_size);
+	sv_sign = (unsigned char*)calloc(sign_size,sizeof(unsigned char));
 	memcpy(sv_sign, buffer + read_dim, sign_size);
 	read_dim += sign_size;
 	for(int ieti = 0; ieti < sign_size; ieti++){
@@ -116,6 +121,10 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	}
 
 	delete(second_m);
+	buffer = NULL;
+	free(new_pem_buffer);
+	BIO_free(serv_cert_pem_buffer);
+	printbuffer = NULL;
 
 	// extracts diffie hellmann server public key received in PEM format
 	// sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
@@ -136,19 +145,20 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 				cout << endl;
 		}
 		X509_STORE_CTX_free(ctx);
-		cout << "CHECK 6 in auth" << endl;
+		cout << "CHECK 6 in auth: the received certificate is correct.\n" << endl;
 		//verifies the signature and generates a session key
 		if(verify_sign(sv_pub_key, sv_pem_buffer, na, sv_pem_dim, sv_sign, sign_size)){
 			//TODO: elliptic curve functions: dh key generation and session key derivation
 			// load elliptic curve parameters
 			sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
+			BIO_free(sv_pem);
 			EVP_PKEY* dh_params = NULL;
 
 			EVP_PKEY_CTX* pctx;
 			pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
 
 			if(pctx == NULL){
-				perror("DH_INIZIALIZATION");
+				printf("Error in DH_INIZIALIZATION.\n");
 			}
 
 			EVP_PKEY_paramgen_init(pctx);
@@ -168,7 +178,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			int ret = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,peer_dh_prvkey);
 
 			if(ret==0)
-				perror("PEM_SERIALIZATION");
+				printf("Error in PEM_SERIALIZATION.\n");
 
 			// send the public key in pem format in clear 
 			// and signed in combination with received nonce 
@@ -178,7 +188,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			Message* final_m = new Message(); 
 
 			// signature of nonce and pem
-			unsigned char* pt = new unsigned char[pem_dim+sizeof(int32_t)];
+			unsigned char* pt = (unsigned char*)calloc(pem_dim+sizeof(int32_t),sizeof(unsigned char));
 			memcpy(pt, pem_buffer, pem_dim);
 			memcpy(pt+pem_dim, &ns, sizeof(int32_t));
 
@@ -204,6 +214,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 
 			free(sv_sign);
 			free(cl_sign);
+			free(pt);
 			free(buffer);
 			delete(final_m);
 
@@ -214,7 +225,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			ret = EVP_PKEY_derive_set_peer(kd_ctx,sv_dh_pubkey);
 
 			if(ret == 0){
-				perror("KEY_DERIVATION");
+				printf("Error in KEY_DERIVATION.\n");
 			}
 
 			unsigned char* secret;
@@ -223,7 +234,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			EVP_PKEY_derive(kd_ctx,NULL,&secret_length);
 
 			// deriving
-			secret = (unsigned char*)malloc(secret_length);
+			secret = (unsigned char*)calloc(secret_length,sizeof(unsigned char));
 			EVP_PKEY_derive(kd_ctx,secret,&secret_length);
 
 			// hashing the secret to produce session key through SHA-256 (aes key: 32byte)
@@ -234,6 +245,10 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			EVP_DigestInit(hash_ctx,EVP_sha256());
 			EVP_DigestUpdate(hash_ctx,secret,secret_length);
 			EVP_DigestFinal(hash_ctx,*sv_session_key,&sv_session_key_length);
+
+			memset(secret,0,secret_length);
+			free(secret);
+			BIO_free(peer_dh_pubkey_pem);
 
 		}
 	}

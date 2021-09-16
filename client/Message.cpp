@@ -68,7 +68,7 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
         return 0;
     }
     if(buffer_dim < MAX_PAYLOAD_SIZE){
-        this->data = (unsigned char*)malloc(buffer_dim*sizeof(unsigned char));
+        this->data = (unsigned char*)calloc(buffer_dim,sizeof(unsigned char));
         memcpy(this->data, buffer, buffer_dim);
         this->data_dim = buffer_dim;
         return 0;
@@ -105,6 +105,7 @@ int32_t Message::Encode_message(unsigned char* key){
     this->ct = (unsigned char*)calloc(this->ct_len, sizeof(unsigned char));
     memcpy(this->ct, tmpCiphertext, this->ct_len);
     free(tmpCiphertext);
+    free(pt);
     return 0;
 }
 

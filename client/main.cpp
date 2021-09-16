@@ -9,7 +9,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
   string prvkey_suffix = "_prvkey.pem";
 	string pubkey_suffix = "_pubkey.pem";
 	int prvkey_buffer_bytes = prefix.size()+prvkey_suffix.size()+username.size()+1;
-	char* prvkey_buffer = new char[prvkey_buffer_bytes];
+	char* prvkey_buffer = (char*)calloc(prvkey_buffer_bytes,sizeof(char));
   int cursor = 0;
   memcpy(prvkey_buffer,prefix.c_str(),prefix.size());
   cursor += prefix.size();
@@ -18,7 +18,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 	memcpy(prvkey_buffer + cursor,prvkey_suffix.c_str(),prvkey_suffix.size()+1);
   cursor = 0;
 	int pubkey_buffer_bytes = pubkey_suffix.size()+username.size()+1;
-	char* pubkey_buffer = new char[pubkey_buffer_bytes];
+	char* pubkey_buffer = (char*)calloc(pubkey_buffer_bytes,sizeof(char));
   memcpy(pubkey_buffer,prefix.c_str(),prefix.size());
   cursor += prefix.size();
 	memcpy(pubkey_buffer + cursor,username.c_str(),username.size());
@@ -28,7 +28,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 	FILE* pem_cl_prvkey = fopen(prvkey_buffer,"r");
 	FILE* pem_cl_pubkey = fopen(pubkey_buffer,"r");
 	if(pem_cl_prvkey==NULL || pem_cl_pubkey == NULL){
-		perror("Unavailable keys.");
+		printf("Unavailable keys.");
     return false;
   }
 	free(prvkey_buffer);
@@ -36,6 +36,9 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 
 	*cl_pub_key = PEM_read_PUBKEY(pem_cl_pubkey,NULL,NULL,NULL);
 	*cl_pr_key = PEM_read_PrivateKey(pem_cl_prvkey,NULL,NULL,(void*)password.c_str());
+
+  fclose(pem_cl_prvkey);
+  fclose(pem_cl_pubkey);
 
   if(!*cl_pr_key || !*cl_pub_key)
     return false;
@@ -46,20 +49,20 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 
 
 int main(int argc, char **argv){
-   	struct session_variables* sessionVariables = (session_variables*)malloc(sizeof(session_variables));
-	  sessionVariables->peer_session_key=NULL;
-    sessionVariables->sv_session_key=NULL;
-    sessionVariables->counterAS=0;
-    sessionVariables->counterSA=0;
-    sessionVariables->counterBA=0;
-    sessionVariables->counterAB=0;
-    sessionVariables->sockfd = 0;
-    sessionVariables->na=0;
-    sessionVariables->chatting=false;
-    sessionVariables->cl_prvkey=NULL;
-    sessionVariables->cl_pubkey=NULL;
-    sessionVariables->peer_public_key=NULL;
-    sessionVariables->cl_dh_prvkey=NULL;
+  struct session_variables* sessionVariables = (session_variables*)malloc(sizeof(session_variables));
+  sessionVariables->peer_session_key=NULL;
+  sessionVariables->sv_session_key=NULL;
+  sessionVariables->counterAS=0;
+  sessionVariables->counterSA=0;
+  sessionVariables->counterBA=0;
+  sessionVariables->counterAB=0;
+  sessionVariables->sockfd = 0;
+  sessionVariables->na=0;
+  sessionVariables->chatting=false;
+  sessionVariables->cl_prvkey=NULL;
+  sessionVariables->cl_pubkey=NULL;
+  sessionVariables->peer_public_key=NULL;
+  sessionVariables->cl_dh_prvkey=NULL;
 
   peer_t server;
   memset(&server, 0, sizeof(server));
@@ -81,7 +84,7 @@ int main(int argc, char **argv){
 	X509_STORE* store = X509_STORE_new();
 	FILE *fp_CA_cert = fopen("keys/ca_cert.pem", "r"); 
 	if(!fp_CA_cert){
-		perror("CA certificate pem file");
+		printf("CA certificate pem file not found!\n");
 		exit(-1);
 	}
 	X509* CA_cert = PEM_read_X509(fp_CA_cert, NULL, NULL, NULL);
@@ -90,23 +93,17 @@ int main(int argc, char **argv){
 
 
 	if(!get_keys(cl_id,password,&sessionVariables->cl_pubkey,&sessionVariables->cl_prvkey)){
-		perror("INVALID_USER");
+		printf("Impossible to fetch keys for the user from pem files.\n");
 		exit(-3);
 	}
   
 	// connect to server
 
-	int numbytes; 
-	int32_t buf_dim;
-	char* buf;
-	int rv;
-	char s[INET6_ADDRSTRLEN];
-
   server.address.sin_family = AF_INET;
 	server.address.sin_port = htons(server_port);
 
 	if(inet_pton(AF_INET,"127.0.0.1", &server.address.sin_addr)<=0){
-		perror("Error in convertion of ip address.");
+		printf("Error in convertion of ip address.\n");
 		exit(-1);
 	};
 
@@ -114,7 +111,7 @@ int main(int argc, char **argv){
 	sessionVariables->sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sessionVariables->sockfd < 0){
-  		perror("ERROR opening socket");
+  		printf("ERROR in opening socket!\n");
 		exit(-1);
 	}
 
@@ -122,28 +119,27 @@ int main(int argc, char **argv){
 	cout << "Socket FD initialized" << endl;
 
 	if (connect(sessionVariables->sockfd,(struct sockaddr *) &server.address,sizeof(server.address)) < 0){
-        perror("ERROR connecting");
+        printf("ERROR connecting to server.\n");
 		exit(-1);
 	}
 
 	cout << "Connected" << endl;
-	string peer_id;
 	
 	//authentication of the client
 	auth(cl_id, sessionVariables->cl_prvkey, sessionVariables->cl_pubkey, sessionVariables->sockfd, &(sessionVariables->sv_session_key), store);
-	  
-    /* Set nonblock for stdin. */
-    int flag = fcntl(STDIN_FILENO, F_GETFL, 0);
-    flag |= O_NONBLOCK;
-    fcntl(STDIN_FILENO, F_SETFL, flag);
+  
+  /* Set nonblock for stdin. */
+  int flag = fcntl(STDIN_FILENO, F_GETFL, 0);
+  flag |= O_NONBLOCK;
+  fcntl(STDIN_FILENO, F_SETFL, flag);
 
-    fd_set read_fds;
-    fd_set write_fds;
-    fd_set except_fds;
+  fd_set read_fds;
+  fd_set write_fds;
+  fd_set except_fds;
 
-    int maxfd = sessionVariables->sockfd;
+  int maxfd = sessionVariables->sockfd;
 
-    printf("Waiting for server message or stdin input. Please, type text to send:\n");
+  printf("Waiting for server message or stdin input. Please, type text to send:\n");
 
   while (1) {
     // Select() updates fd_set's, so we need to build fd_set's before each select()call.
@@ -153,13 +149,13 @@ int main(int argc, char **argv){
     
     switch (activity) {
       case -1:
-        perror("select()");
+        printf("Error in select().\n");
         close(sessionVariables->sockfd); 
         exit(-1);
 
       case 0:
         // you should never get here
-        printf("select() returns 0.\n");
+        printf("Error in select(): returns 0.\n");
         close(sessionVariables->sockfd); 
         exit(-1);
 
@@ -180,8 +176,19 @@ int main(int argc, char **argv){
 
         if (FD_ISSET(sessionVariables->sockfd, &read_fds)) {
           if (received_msg_handler(sessionVariables, &server) != 0){
-            close(sessionVariables->sockfd); 
-            exit(-1);}
+            printf("Bad message has been received, if you're in a chatting session, it's going to be closed for safety.\n");
+            if(sessionVariables->chatting){
+              Message* msg = NULL;
+              if(prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg))
+                enqueue(&(server.send_buffer),msg);
+              sessionVariables->chatting = false;
+              sessionVariables->counterAB = 0;
+              sessionVariables->counterBA = 0;
+              EVP_PKEY_free(sessionVariables->peer_public_key);
+              sessionVariables->peer_public_key = NULL;
+              free(sessionVariables->peer_session_key);
+              sessionVariables->peer_session_key = NULL;
+            }
           }
         }
 
@@ -197,9 +204,8 @@ int main(int argc, char **argv){
           close(sessionVariables->sockfd); 
             exit(-1);
         }
-    
+      }
     printf("And we are still waiting for server or stdin activity. You can type something to send:\n");
     }
-  
   return 0;
 }
