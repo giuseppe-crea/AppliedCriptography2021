@@ -71,12 +71,13 @@ bool chat_request_accepted(unsigned char* data, int data_dim, struct session_var
     long pem_dim;
     BIO* peer_pub_key_pem = BIO_new(BIO_s_mem());
     memcpy(&pem_dim, data, sizeof(long));
-    buffer = (unsigned char*)calloc(pem_dim, sizeof(unsigned char));
-    memcpy(buffer, data+sizeof(long), pem_dim);
+    // 
+    unsigned char * pem_buffer = (unsigned char*)calloc(pem_dim, sizeof(unsigned char));
+    memcpy(pem_buffer, data+sizeof(long), pem_dim);
 
-    int rv = BIO_write(peer_pub_key_pem, buffer,pem_dim);
+    int rv = BIO_write(peer_pub_key_pem, pem_buffer, pem_dim);
 
-    free(buffer);
+    free(pem_buffer);
 
     if(data_dim != pem_dim+sizeof(long)){
         BIO_free(peer_pub_key_pem);
@@ -171,6 +172,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     EVP_PKEY_keygen_init(kg_ctx);
     EVP_PKEY_keygen(kg_ctx,&(sessionVariables->cl_dh_prvkey));
     EVP_PKEY_CTX_free(kg_ctx);
+    EVP_PKEY_free(dh_params);
 
     // save client public key in pem format in a memory BIO
     BIO* cl_dh_pubkey_pem = BIO_new(BIO_s_mem());                                                
@@ -334,6 +336,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     EVP_PKEY_keygen_init(kg_ctx);
     EVP_PKEY_keygen(kg_ctx,&cl_dh_prvkey);
     EVP_PKEY_CTX_free(kg_ctx);
+    EVP_PKEY_free(dh_params);
 
     // save client public key in pem format in a memory BIO
     BIO* cl_dh_pubkey_pem = BIO_new(BIO_s_mem());                       
@@ -360,8 +363,8 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
     memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
     unsigned char* cl_sign = NULL;
-	unsigned int cl_sign_size;
-    if(!signature(sessionVariables->cl_prvkey, pt, &cl_sign,(cl_pem_dim+sizeof(int32_t)),&cl_sign_size)){   
+	unsigned int cl_sign_size = 0;
+    if(!signature(sessionVariables->cl_prvkey, pt, &cl_sign, cl_pem_dim+sizeof(int32_t), &cl_sign_size)){   
         printf("Error in computing signature.\n");
         free(temp);
         free(peer_sign);
@@ -496,7 +499,7 @@ void second_key_negotiation(unsigned char* data, int data_dim, struct session_va
     EVP_PKEY* peer_dh_pubkey = NULL;
 	peer_dh_pubkey = PEM_read_bio_PUBKEY(peer_pem,NULL,NULL,NULL);
 	unsigned char* peer_pem_buffer;
-	peer_pem_size = BIO_get_mem_data(peer_pem, &peer_pem_buffer);
+	BIO_get_mem_data(peer_pem, &peer_pem_buffer);
 
     if(!verify_sign(sessionVariables->peer_public_key, peer_pem_buffer, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
         printf("Error: invalid signature.\n");

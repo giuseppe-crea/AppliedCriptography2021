@@ -172,6 +172,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			EVP_PKEY_keygen_init(kg_ctx);
 			EVP_PKEY_keygen(kg_ctx,&peer_dh_prvkey);
 			EVP_PKEY_CTX_free(kg_ctx);
+			EVP_PKEY_free(dh_params);
 
 			// save public key in pem format in a memory BIO
 			BIO* peer_dh_pubkey_pem = BIO_new(BIO_s_mem());

@@ -256,7 +256,9 @@ int final_auth_message_handler(Message* message, ClientElement* user){
         EVP_MD_CTX_free(hash_ctx);
         EVP_PKEY_CTX_free(kd_ctx); 
       }
+
       EVP_PKEY_free(peer_dh_pubkey);
+      BIO_free(peer_dh_pub_key_bio);
     }
     free(buffer);
   }

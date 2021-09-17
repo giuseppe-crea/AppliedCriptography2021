@@ -20,6 +20,7 @@ ClientElement::~ClientElement()
         BIO_free(peer_dh_pubkey_pem);
         peer_dh_pubkey_pem = NULL;
     }
+    /*
     if(pub_dh_key_received != NULL){
         BIO_free(pub_dh_key_received);
         pub_dh_key_received = NULL;
@@ -28,6 +29,7 @@ ClientElement::~ClientElement()
         EVP_PKEY_free(pub_dh_key);
         pub_dh_key = NULL;
     }
+    */
     if(pri_dh_key != NULL){
         EVP_PKEY_free(pri_dh_key);
         pri_dh_key = NULL;
@@ -163,7 +165,7 @@ int ClientElement::GenerateKeysForUser(){
     EVP_PKEY_keygen_init(kg_ctx);
     int ret_pv = EVP_PKEY_keygen(kg_ctx,&pri_dh_key);
     EVP_PKEY_CTX_free(kg_ctx);
-
+    EVP_PKEY_free(dh_params);
     std::printf("Starting key sharing.");
 
     // save public key in pem format in a memory BIO
@@ -187,7 +189,7 @@ int ClientElement::GenerateKeysForUser(){
     
     memcpy(pub_dh_key_to_send,pub_dh_key_to_send_buffer,tosend_dh_key_size);
     std::printf("[GenerateKeysForUsers] tosend_dh_key_size: %ld\n", tosend_dh_key_size);
-    EVP_PKEY_free(dh_params);
+    
     return 0;
 }
 
@@ -196,6 +198,7 @@ unsigned char* ClientElement::GetToSendPubDHKey(){
     return pub_dh_key_to_send;
 }
 
+/*
 // returns a SHALLOW COPY. DO NOT FREE MANUALLY
 BIO* ClientElement::GetPeerPublicDHKey(){
     return this->pub_dh_key_received;
@@ -211,6 +214,7 @@ int ClientElement::SetPeerPublicDHKey(BIO* key, long keysize){
     }
     return 1;
 }
+*/
 
 long ClientElement::GetToSendPubDHKeySize(){
     return this->tosend_dh_key_size;
