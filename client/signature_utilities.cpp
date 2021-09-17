@@ -13,13 +13,16 @@ using namespace std;
 bool signature(EVP_PKEY* cl_pr_key, unsigned char* pt, unsigned char** sign, int length, unsigned int* sign_size){
 	int ret;
 
+	unsigned char* signature;
+	unsigned int signature_size = 1;
+
 	// creates the signature context:
 	EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
 	if(!md_ctx){ cerr << "Error: EVP_MD_CTX_new returned NULL\n"; exit(1); }
 
 	//allocates the signature
 	int key_size = EVP_PKEY_size(cl_pr_key);
-	*sign = (unsigned char*)calloc(key_size, sizeof(unsigned char));
+	signature = (unsigned char*)calloc(key_size, sizeof(unsigned char));
 
 	//computes the signature
 	ret = EVP_SignInit(md_ctx, md);
@@ -32,12 +35,16 @@ bool signature(EVP_PKEY* cl_pr_key, unsigned char* pt, unsigned char** sign, int
 	if(ret == 0){ 
 		cerr << "Error: EVP_SignUpdate returned " << ret << "\n"; exit(1); 
 	}
-	ret = EVP_SignFinal(md_ctx, *sign, sign_size, cl_pr_key);
+	ret = EVP_SignFinal(md_ctx, signature, &signature_size, cl_pr_key);
 	
 	if(ret == 0){ 
 		cerr << "Error: EVP_SignFinal returned " << ret << "\n"; exit(1); 
 	}
 	EVP_MD_CTX_free(md_ctx);
+
+	*sign = signature;
+	*sign_size = signature_size;
+
 	return true;
 }
 

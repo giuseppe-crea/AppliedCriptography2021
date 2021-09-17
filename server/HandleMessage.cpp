@@ -473,8 +473,10 @@ int close_client_connection(ClientElement *client)
     // if the client had a partner, we close that chat
     if(client->isBusy){
       ClientElement* partner = get_user_by_id(client->GetPartnerName());
-      partner->SetPartnerName("");
-      quick_message(partner, closed_chat_code);
+      if(partner!=NULL){
+        partner->SetPartnerName("");
+        quick_message(partner, closed_chat_code);
+      }
       client->SetPartnerName("");
     }
     connectedClientsByUsername.erase(username);
