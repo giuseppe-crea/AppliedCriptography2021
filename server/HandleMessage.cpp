@@ -401,9 +401,10 @@ int message_passthrough(ClientElement* user, Message* message){
     free(data_buffer);
     if(ret == 0)
         ret += target->Enqueue_message(reply);
-    if(ret != 0)
+    if(ret != 0){
       delete(reply);
       return quick_message(user, closed_chat_code);
+    }
     return ret;
 }
 

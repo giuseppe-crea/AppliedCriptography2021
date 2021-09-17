@@ -150,7 +150,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     //sends a new nonce, signed nonce and dh key as an automatic reply
     
     // load elliptic curve parameters
-    EVP_PKEY* dh_params;
+    EVP_PKEY* dh_params = NULL;
 
     EVP_PKEY_CTX* pctx;
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
@@ -214,7 +214,19 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     memcpy(buffer + cursor, &cl_sign_size, sizeof(unsigned int));
     cursor += sizeof(unsigned int);
     memcpy(buffer + cursor, cl_sign, cl_sign_size);
-    
+
+    cout << "Printing out the sent pem file.\n";
+    for(int i = 0; i<cl_pem_dim; i++){
+        cout << (int)cl_pem_buffer[i];
+    }
+    cout << endl;
+    cout << "Printing out the sent signature.\n";
+    for(int i = 0; i<cl_sign_size; i++){
+        cout << (int)cl_sign[i];
+    }
+    cout << endl;
+
+
     Message* msg = NULL;
     bool rtrn = prepare_msg_to_server(first_key_negotiation_code, sessionVariables, buffer, buffer_bytes, &msg);
     
@@ -272,10 +284,21 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
    // extracts diffie hellmann peer public key received in PEM format
     EVP_PKEY* peer_dh_pubkey = NULL;
 	peer_dh_pubkey = PEM_read_bio_PUBKEY(peer_pem,NULL,NULL,NULL);
-	unsigned char* peer_pem_buffer;
-	peer_pem_size = BIO_get_mem_data(peer_pem,&peer_pem_buffer);
+	unsigned char* peer_pem_buffer = NULL;
+	BIO_get_mem_data(peer_pem,&peer_pem_buffer);
 
-    if(!verify_sign(sessionVariables->peer_public_key, peer_pem_buffer, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
+    cout << "Printing out the received pem file.\n";
+    for(int i = 0; i<peer_pem_size; i++){
+        cout << (int)(data+12)[i];
+    }
+    cout << endl;
+    cout << "Printing out the received signature.\n";
+    for(int i = 0; i<peer_sign_size; i++){
+        cout << (int)peer_sign[i];
+    }
+    cout << endl;
+
+    if(!verify_sign(sessionVariables->peer_public_key, data + sizeof(int32_t)+sizeof(long), sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
         printf("Error in KEY_NEGOTIATION, invalid signature.\n");
         free(temp);
         free(peer_sign);
@@ -285,9 +308,9 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     }
 
     // load elliptic curve parameters
-    EVP_PKEY* dh_params;
+    EVP_PKEY* dh_params = NULL;
 
-    EVP_PKEY_CTX* pctx;
+    EVP_PKEY_CTX* pctx = NULL;
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
 
     if(pctx == NULL){
@@ -336,9 +359,9 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     unsigned char* pt = (unsigned char*)calloc(cl_pem_dim+sizeof(int32_t),sizeof(unsigned char));       
     memcpy(pt, cl_pem_buffer, cl_pem_dim);
     memcpy(pt+cl_pem_dim, &nb, sizeof(int32_t));
-    unsigned char* cl_sign;
+    unsigned char* cl_sign = NULL;
 	unsigned int cl_sign_size;
-    if(!signature(sessionVariables->cl_prvkey, pt, &cl_sign,cl_pem_dim+sizeof(int32_t),&cl_sign_size)){   
+    if(!signature(sessionVariables->cl_prvkey, pt, &cl_sign,(cl_pem_dim+sizeof(int32_t)),&cl_sign_size)){   
         printf("Error in computing signature.\n");
         free(temp);
         free(peer_sign);

@@ -1,6 +1,7 @@
 // constant protocol variables
 #include <string.h>
 #include <string>
+#include <openssl/evp.h>
 using namespace std;
 
 const int first_auth_msg_code = 290;
