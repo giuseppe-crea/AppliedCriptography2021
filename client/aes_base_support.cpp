@@ -95,6 +95,7 @@ int gcm_decrypt(unsigned char *ciphertext, int ciphertext_len,
     int len;
     int plaintext_len;
     int ret;
+    int cipher_bloc_size = EVP_CIPHER_block_size(EVP_aes_256_gcm());
 
     /* Create and initialise the context */
     if(!(ctx = EVP_CIPHER_CTX_new())){
@@ -133,6 +134,7 @@ int gcm_decrypt(unsigned char *ciphertext, int ciphertext_len,
      * Provide the message to be decrypted, and obtain the plaintext output.
      * EVP_DecryptUpdate can be called multiple times if necessary
      */
+    //plaintext = (unsigned char*)calloc(cipher_bloc_size+ciphertext_len,sizeof(unsigned char));
     if(!EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len)){
         printf("Decryption error.\n");
         return 0;

@@ -8,3 +8,5 @@ shittyExamples/signatureVerifier.out
 shittyExamples/signatureVerifier
 server/server.out
 client/client.out
+client/clientS.out
+server/serverS.out

@@ -101,30 +101,14 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	sv_sign = (unsigned char*)calloc(sign_size,sizeof(unsigned char));
 	memcpy(sv_sign, buffer + read_dim, sign_size);
 	read_dim += sign_size;
-	for(int ieti = 0; ieti < sign_size; ieti++){
-		cout << (int)sv_sign[ieti];
-		if(ieti==sign_size-1)
-			cout << endl;
-	}
 	cout << "Signature read" << endl;
 	BIO_write(serv_cert_pem_buffer, buffer + read_dim, buffer_bytes - read_dim);
 	cout << "Server cert read" << endl;
 	serv_cert = PEM_read_bio_X509(serv_cert_pem_buffer, NULL, 0, NULL);
-	unsigned char* printbuffer;
-	long len_bio_print = BIO_get_mem_data(serv_cert_pem_buffer, &printbuffer);
-	cout << "Bytes in server_cert_pem_buffer" << endl;
-	printf("len_bio_print: %ld, buffer_bytes - read_dim: %ld\n",len_bio_print, buffer_bytes - read_dim);
-	for(int ieti = 0; ieti < buffer_bytes - read_dim; ieti++){
-		cout << (int)printbuffer[ieti];
-		if(ieti==buffer_bytes-read_dim-1)
-			cout << endl;
-	}
-
 	delete(second_m);
 	buffer = NULL;
 	free(new_pem_buffer);
 	BIO_free(serv_cert_pem_buffer);
-	printbuffer = NULL;
 
 	// extracts diffie hellmann server public key received in PEM format
 	// sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
@@ -137,13 +121,6 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 
 	if(X509_verify_cert(ctx)){ // verifies serv_cert based on the context previously created
 		EVP_PKEY* sv_pub_key = X509_get_pubkey(serv_cert);
-		unsigned char* printbuffer = new unsigned char[512];
-		memcpy(printbuffer, sv_pub_key, 512);
-		for(int ieti = 0; ieti < 512; ieti++){
-			cout << (int)printbuffer[ieti];
-			if(ieti == 511) 
-				cout << endl;
-		}
 		X509_STORE_CTX_free(ctx);
 		cout << "CHECK 6 in auth: the received certificate is correct.\n" << endl;
 		//verifies the signature and generates a session key
@@ -200,7 +177,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			//sending response message to server
 			final_m->SetOpCode(final_auth_msg_code);
 			buffer_bytes = pem_dim + cl_sign_size + sizeof(long) + sizeof(unsigned int);
-			buffer = new unsigned char[buffer_bytes];
+			buffer = (unsigned char*)calloc(buffer_bytes, sizeof(unsigned char));
 			int32_t cursor = 0;
 			memcpy(buffer, &pem_dim, sizeof(long));
 			cursor += sizeof(long);

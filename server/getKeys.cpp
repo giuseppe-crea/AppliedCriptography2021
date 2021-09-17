@@ -12,8 +12,8 @@ bool get_keys(string username, EVP_PKEY** cl_pub_key){
     
 	string pubkey_suffix = "_pubkey.pem";
     int cursor = 0;
-	int pubkey_buffer_bytes = pubkey_suffix.size()+username.size()+1;
-	char* pubkey_buffer = new char[pubkey_buffer_bytes];
+	int pubkey_buffer_bytes = pubkey_suffix.size()+username.size()+prefix.size()+1;
+	char* pubkey_buffer = (char*)calloc(pubkey_buffer_bytes,sizeof(char));
     memcpy(pubkey_buffer,prefix.c_str(),prefix.size());
     cursor += prefix.size();
 	memcpy(pubkey_buffer + cursor,username.c_str(),username.size());

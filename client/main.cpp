@@ -17,7 +17,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
   cursor += username.size();
 	memcpy(prvkey_buffer + cursor,prvkey_suffix.c_str(),prvkey_suffix.size()+1);
   cursor = 0;
-	int pubkey_buffer_bytes = pubkey_suffix.size()+username.size()+1;
+	int pubkey_buffer_bytes = prefix.size()+pubkey_suffix.size()+username.size()+1;
 	char* pubkey_buffer = (char*)calloc(pubkey_buffer_bytes,sizeof(char));
   memcpy(pubkey_buffer,prefix.c_str(),prefix.size());
   cursor += prefix.size();
