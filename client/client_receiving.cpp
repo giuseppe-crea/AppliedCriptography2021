@@ -228,7 +228,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     }
     cout << endl;
 
-
+    // ok 
     Message* msg = NULL;
     bool rtrn = prepare_msg_to_server(first_key_negotiation_code, sessionVariables, buffer, buffer_bytes, &msg);
     
