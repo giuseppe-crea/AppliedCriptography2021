@@ -234,15 +234,17 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     
     if(rtrn)
         *m = msg;
+    if(!rtrn){
+        EVP_PKEY_free(sessionVariables->cl_dh_prvkey);
+        sessionVariables->cl_dh_prvkey = NULL;
+    }
 
     BIO_free(cl_dh_pubkey_pem);
     free(cl_sign);
     free(buffer);
     free(pt);
-    EVP_PKEY_free(sessionVariables->cl_dh_prvkey);
-    sessionVariables->cl_dh_prvkey = NULL;
 
-    return ret;
+    return rtrn;
 };
 
 // function that handles the recieved diffie-hellmann key of the peer and sends a newly generated dh key; it also computes the peer session key
