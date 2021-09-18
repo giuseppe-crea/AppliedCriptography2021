@@ -13,7 +13,7 @@ int gcm_encrypt(unsigned char *plaintext, int plaintext_len,
 
     int len;
 
-    int ciphertext_len;
+    int ciphertext_len = 0;
 
 
     /* Create and initialise the context */
@@ -49,17 +49,23 @@ int gcm_encrypt(unsigned char *plaintext, int plaintext_len,
         printf("AAD data initialization error.\n");
         return 0;
     }
+    int parsed = 0;
+    while(parsed <= plaintext_len-128){
+        EVP_EncryptUpdate(ctx, ciphertext+parsed, &len, plaintext+parsed, 128);
+        parsed+=128;
+        ciphertext_len += len;
+    }
 
     /*
      * Provide the message to be encrypted, and obtain the encrypted output.
      * EVP_EncryptUpdate can be called multiple times if necessary
      */
-    if(1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len)){
+    if(1 != EVP_EncryptUpdate(ctx, ciphertext+parsed, &len, plaintext+parsed, plaintext_len - parsed)){
         printf("Encryption error.\n");
         return 0;
     }
 
-    ciphertext_len = len;
+    ciphertext_len += len;
 
     /*
      * Finalise the encryption. Normally ciphertext bytes may be written at
@@ -93,9 +99,8 @@ int gcm_decrypt(unsigned char *ciphertext, int ciphertext_len,
 {
     EVP_CIPHER_CTX *ctx;
     int len;
-    int plaintext_len;
+    int plaintext_len = 0;
     int ret;
-    int cipher_bloc_size = EVP_CIPHER_block_size(EVP_aes_256_gcm());
 
     /* Create and initialise the context */
     if(!(ctx = EVP_CIPHER_CTX_new())){
@@ -134,13 +139,20 @@ int gcm_decrypt(unsigned char *ciphertext, int ciphertext_len,
      * Provide the message to be decrypted, and obtain the plaintext output.
      * EVP_DecryptUpdate can be called multiple times if necessary
      */
-    //plaintext = (unsigned char*)calloc(cipher_bloc_size+ciphertext_len,sizeof(unsigned char));
-    if(!EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len)){
-        printf("Decryption error.\n");
-        return 0;
+    int parsed = 0;
+    while(parsed <= ciphertext_len-128){
+        if(!EVP_DecryptUpdate(ctx, plaintext+parsed, &len, ciphertext+parsed, 128)){
+            printf("Decryption error.\n");
+            return 0;
+        }else{
+            parsed += 128;
+            plaintext_len += len;
+        }
     }
 
-    plaintext_len = len;
+    EVP_DecryptUpdate (ctx, plaintext+parsed, &len, ciphertext+parsed, ciphertext_len - parsed);
+
+    plaintext_len += len;
 
     /* Set expected tag value. Works in OpenSSL 1.0.1d and later */
     if(!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag)){

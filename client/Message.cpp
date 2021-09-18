@@ -68,6 +68,8 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
         return 0;
     }
     if(buffer_dim < MAX_PAYLOAD_SIZE){
+        printf("[Message][SetData] size of buffer_dim: %d\n", buffer_dim);
+        fflush(stdout);
         this->data = (unsigned char*)calloc(buffer_dim,sizeof(unsigned char));
         memcpy(this->data, buffer, buffer_dim);
         this->data_dim = buffer_dim;
@@ -138,7 +140,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
 
 
     // decryption
-    unsigned char* pt_buffer;
+    unsigned char* pt_buffer = (unsigned char *)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0)
         perror("Negative data length");
@@ -152,7 +154,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     this->SetCounter(counter);
     if(this->setData(pt_buffer+cursor, dataLen-cursor)!=0)
         perror("Error in setting data");
-    
+    free(pt_buffer);
     return 0;
 }
 

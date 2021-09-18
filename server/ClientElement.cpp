@@ -9,6 +9,7 @@ ClientElement::ClientElement()
     unsent_bytes = 0;
     current_sending_byte = -1;
     pri_dh_key = NULL;
+    sessionKey = NULL;
 }
 	
 ClientElement::~ClientElement()
@@ -231,7 +232,7 @@ EVP_PKEY* ClientElement::GetPublicKey(){
 // Deep copy of session key into user object
 void ClientElement::SetSessionKey(unsigned char* key, int key_len){
     if(key != NULL){
-        this->sessionKey = new unsigned char[key_len];
+        this->sessionKey = (unsigned char*)calloc(key_len, sizeof(unsigned char));
         memcpy(this->sessionKey, key, key_len);
         this->session_key_len = key_len;
     }

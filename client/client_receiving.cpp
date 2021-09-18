@@ -501,7 +501,7 @@ void second_key_negotiation(unsigned char* data, int data_dim, struct session_va
 	unsigned char* peer_pem_buffer;
 	BIO_get_mem_data(peer_pem, &peer_pem_buffer);
 
-    if(!verify_sign(sessionVariables->peer_public_key, peer_pem_buffer, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
+    if(!verify_sign(sessionVariables->peer_public_key, temp, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
         printf("Error: invalid signature.\n");
         free(peer_sign);
         free(temp);

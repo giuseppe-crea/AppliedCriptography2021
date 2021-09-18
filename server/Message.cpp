@@ -158,7 +158,7 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     cursor += 12;
 
     // decryption
-    unsigned char* pt_buffer;
+    unsigned char* pt_buffer = (unsigned char *)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0){
         return false;
@@ -171,8 +171,10 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
     if(this->setData(pt_buffer+cursor, dataLen-cursor) != 0){
+        free(pt_buffer);
         return false;
     }
+    free(pt_buffer);
     return true;
 }
 
