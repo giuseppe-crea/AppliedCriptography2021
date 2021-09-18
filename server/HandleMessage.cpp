@@ -32,7 +32,7 @@ EVP_PKEY* load_server_private_key(){
 
 ClientElement* get_user_by_id(string id){
     map<string, ClientElement*>::iterator tmpIterator = connectedClientsByUsername.find(id);
-    /*
+    
     map<string, ClientElement*>::iterator it;
     for(it = connectedClientsByUsername.begin(); it != connectedClientsByUsername.end(); it++){
       cout << "Comparing key:\""<< it->first << "\" with id:\"" << id << "\": " << it->first.compare(id) << endl;;
@@ -51,7 +51,7 @@ ClientElement* get_user_by_id(string id){
           cout << endl;
       }
     }
-    */
+    
     if(tmpIterator != connectedClientsByUsername.end()){
         return tmpIterator ->second;
     }
@@ -99,10 +99,12 @@ int first_auth_message_handler(Message* message, ClientElement* user){
     memcpy(&nonce_user, data_buffer, sizeof(int32_t));
     
     // copy data_buf_len - sizeof(int32_t) bytes into username
-    unsigned char* username_buffer = new unsigned char[data_buf_len-sizeof(int32_t)];
+    unsigned char* username_buffer = (unsigned char*)calloc(data_buf_len-sizeof(int32_t), sizeof(unsigned char));
     memcpy(username_buffer, data_buffer+sizeof(int32_t), data_buf_len-sizeof(int32_t));
     // memcpy(username_buffer+data_buf_len-sizeof(int32_t), "\0", 1);
-    string username = (reinterpret_cast<char*>(username_buffer));
+    string username(reinterpret_cast<char*>(username_buffer), data_buf_len-sizeof(int32_t));
+    free(username_buffer);
+    username_buffer = NULL;
     
     // add a mapping (username, clientelement) for this user
     // then populating the ClientElement object
@@ -111,14 +113,15 @@ int first_auth_message_handler(Message* message, ClientElement* user){
     user->SetUsername(username);
     user->SetNonceReceived(nonce_user);
     free(data_buffer);
+    data_buffer = NULL;
   }else{
     fprintf(stderr, "first auth message: getdata\n");
     free(data_buffer);
+    data_buffer = NULL;
     return -1;
   }
   if(user->GenerateKeysForUser()){
     fprintf(stderr, "DH Key generation failed\n");
-    free(data_buffer);
     return 1;
   }
   // build reply for the client
@@ -207,6 +210,8 @@ int final_auth_message_handler(Message* message, ClientElement* user){
     // signature to verify
     unsigned char* sign = (unsigned char*)calloc(sign_size, sizeof(unsigned char));
     memcpy(sign, data_buffer + cursor, sign_size);
+    free(data_buffer);
+    data_buffer = NULL;
     // verify signature
     if(!verify_sign(user->GetPublicKey(), buffer, user->GetNonceSent(), pem_dim, sign, sign_size)){
       fprintf(stderr, "[final_auth_msg_code][Signature Verification] %s failed.\n", user->GetUsername().c_str());
@@ -276,13 +281,14 @@ int chat_request_handler(Message* message, ClientElement* user){
       return 1;
   }
   // ugly conversion to remove the additional 0 we get at the end of this buffer
-  std::string wanna_chat_with_user(reinterpret_cast<char const*>(data_buffer), data_buf_len-1);
+  std::string wanna_chat_with_user(reinterpret_cast<char const*>(data_buffer), data_buf_len);
   // wanna_chat_with_user.erase(remove_if(wanna_chat_with_user.begin(), wanna_chat_with_user.end(), isspace), wanna_chat_with_user.end());
   ClientElement* contact = get_user_by_id(wanna_chat_with_user);
   // placing user's username in data buffer
   free(data_buffer);
+  data_buffer = NULL;
   data_buf_len = user->GetUsername().size();
-  data_buffer = (unsigned char* )calloc(data_buf_len, sizeof(unsigned char));
+  data_buffer = (unsigned char* )calloc(data_buf_len, sizeof(unsigned char)); 
   memcpy(data_buffer, user->GetUsername().c_str(), data_buf_len);
   // check if that user exists, if they aren't busy, and if the requesting user isn't busy
   if(contact != NULL && !contact->isBusy && !user->isBusy){
@@ -293,6 +299,8 @@ int chat_request_handler(Message* message, ClientElement* user){
       ret =+ reply->SetOpCode(chat_request_received_code);
       ret =+ reply->setData(data_buffer, data_buf_len);
       ret =+ reply->Encode_message(contact->GetSessionKey());
+      free(data_buffer);
+      data_buffer = NULL;
       if(ret == 0)
           ret =+ contact->Enqueue_message(reply);
       if(ret == 0){
@@ -304,8 +312,11 @@ int chat_request_handler(Message* message, ClientElement* user){
         delete(reply);
         return quick_message(user, chat_request_denied_code);
       }         
-  }else
+  }else{
+      free(data_buffer);
+      data_buffer = NULL;
       return quick_message(user, chat_request_denied_code);
+  }
   return 0;
 }
 
@@ -353,11 +364,15 @@ int send_peer_pubkey(ClientElement* user, int opCode){
 int chat_request_accepted_handler(Message* message, ClientElement* user){
   unsigned char* data_buffer;
   int data_buf_len;
-  // open the message->data field, read the user ID within, send that user a "start chat with this user" message
+  // This message only needs to read the op code, as the actual chat partner was already locked into both user objects
   if(message->getData(&data_buffer, &data_buf_len) != 0){
+    free(data_buffer);
+    data_buffer = NULL;
     fprintf(stderr, "Failed to get data field from message.\n");
     return 1;
   }
+  free(data_buffer);
+  data_buffer = NULL;
   int ret = 0;
   ClientElement* partner = get_user_by_id(user->GetPartnerName());
   ret += send_peer_pubkey(user, peer_public_key_msg_code);
@@ -401,6 +416,7 @@ int message_passthrough(ClientElement* user, Message* message){
     ret += reply->setData(data_buffer, data_buf_len);
     ret += reply->Encode_message(target->GetSessionKey());
     free(data_buffer);
+    data_buffer = NULL;
     if(ret == 0)
         ret += target->Enqueue_message(reply);
     if(ret != 0){
@@ -637,29 +653,41 @@ int receive_from_peer(ClientElement* user)
       else {
           string error_message = "["+user->GetUsername()+"] recv() error\n";
           perror(error_message.c_str());
+          free(buffer);
+          buffer = NULL;
           return -1;
       }
     } 
     else if (received_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        free(buffer);
+        buffer = NULL;
         return 0;
     }
     // If recv() returns 0, it means that peer gracefully shutdown.
     else if (received_count == 0 && received_total != len_to_receive) {
         std::printf("[%s] recv() 0 bytes. Peer gracefully shutdown.\n", user->GetUsername().c_str());
+        free(buffer);
+        buffer = NULL;
         return -1;
     }
     else if (received_count > 0) {
         received_total += received_count;
     }
-    else if (received_total == len_to_receive)
+    else if (received_total == len_to_receive){
+        free(buffer);
+        buffer = NULL;
         return 0;
+    }
   }
   // MADE IT HERE
   // At this point we possess the whole message
   Message* rcv_msg = new Message();
   if(!encrypted){
-    if(!rcv_msg->Unwrap_unencrypted_message(buffer, len_to_receive))
+    if(!rcv_msg->Unwrap_unencrypted_message(buffer, len_to_receive)){
+      free(buffer);
+      buffer = NULL;
       return -1;
+    }
     if(noname)
       std::printf("[%d] Handling unencrypted message...\n", user->GetSocketID());
     else
@@ -668,11 +696,16 @@ int receive_from_peer(ClientElement* user)
     // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
   }
   if(encrypted){
-    if(!rcv_msg->Decode_message(buffer, len_to_receive, user->GetSessionKey()))
+    if(!rcv_msg->Decode_message(buffer, len_to_receive, user->GetSessionKey())){
+      free(buffer);
+      buffer = NULL;
       return -1;
-    int data_dim;
-    unsigned char* data;
-    rcv_msg->getData(&data, &data_dim);
+    }
+    // Vestigial code? All HandleMessage calls have their own get data call within, no idea what this was for
+    // commenting it out for now
+    // int data_dim;
+    // unsigned char* data;
+    // rcv_msg->getData(&data, &data_dim);
     if(rcv_msg->GetCounter() == user->GetCounterFrom()){
       user->IncreaseCounterFrom();
       std::printf("[%s] Handling encrypted message...\n", user->GetUsername().c_str());
@@ -680,9 +713,13 @@ int receive_from_peer(ClientElement* user)
       // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
     }else{
       fprintf(stderr,"[%s] Counter mismatch, dropping.\n", user->GetUsername().c_str());
+      free(buffer);
+      buffer = NULL;
       return -1;
     }
   }
+  free(buffer);
+  buffer = NULL;
   if(user->CounterSizeCheck()){
     // the user's to or from counter reached INT_MAX(!!) size
     // gotta put them in the timeout box

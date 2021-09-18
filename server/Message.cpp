@@ -89,7 +89,7 @@ int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
     if(this->data != NULL){
         *datadim = this->data_dim;
         printf("[getData]: Allocating buffer.\n");
-        *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char));
+        *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char)); //TODO: NEEDS A FREE
         printf("[getData]: Copying into buffer %d bytes.\n", this->data_dim);
         memcpy(*buffer, this->data, this->data_dim);
         return 0;
@@ -114,11 +114,19 @@ int32_t Message::Encode_message(unsigned char* key){
     }
 
     unsigned char* tmpCiphertext = (unsigned char*)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
-    if(this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, tmpCiphertext, this->ct_tag)))
+    if(this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, tmpCiphertext, this->ct_tag))){
+        free(tmpCiphertext);
+        tmpCiphertext = NULL;
+        free(pt);
+        pt = NULL;
         return -1;
+    }
     this->ct = (unsigned char*)calloc(this->ct_len, sizeof(unsigned char));
     memcpy(this->ct, tmpCiphertext, this->ct_len);
     free(tmpCiphertext);
+    tmpCiphertext = NULL;
+    free(pt);
+    pt = NULL;
     this->encrypted = true;
     return 0;
 }
@@ -131,10 +139,15 @@ bool Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_siz
     memcpy(&opCode, buffer, sizeof(int32_t));
     cursor += sizeof(int32_t);
     this->SetOpCode(opCode);
-    unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer-cursor);
+    unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer-cursor); 
     memcpy(data_buffer, buffer+cursor, data_size_buffer-cursor);
-    if(this->setData(data_buffer, data_size_buffer-cursor))
+    if(this->setData(data_buffer, data_size_buffer-cursor)){
+        free(data_buffer);
+        data_buffer = NULL;
         return false;
+    }
+    free(data_buffer);
+    data_buffer = NULL;
     return true;
 }
 
@@ -150,8 +163,8 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer);
     memcpy(data_buffer, buffer+cursor, data_size_buffer);
     cursor += data_size_buffer;
-    unsigned char* iv_buffer = (unsigned char *)malloc(12);
-    unsigned char* tag_buffer = (unsigned char *)malloc(16);
+    unsigned char* iv_buffer = (unsigned char *)malloc(12); 
+    unsigned char* tag_buffer = (unsigned char *)malloc(16); 
     memcpy(tag_buffer, buffer+cursor, 16);
     cursor += 16;
     memcpy(iv_buffer, buffer+cursor, 12);
@@ -160,6 +173,12 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     // decryption
     unsigned char* pt_buffer = (unsigned char *)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
+    free(data_buffer);
+    free(tag_buffer);
+    free(iv_buffer);
+    data_buffer = NULL;
+    tag_buffer = NULL;
+    iv_buffer = NULL;
     if(dataLen <= 0){
         return false;
     }
@@ -172,9 +191,11 @@ bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned c
     this->SetCounter(counter);
     if(this->setData(pt_buffer+cursor, dataLen-cursor) != 0){
         free(pt_buffer);
+        pt_buffer = NULL;
         return false;
     }
     free(pt_buffer);
+    pt_buffer = NULL;
     return true;
 }
 
@@ -202,7 +223,6 @@ int32_t Message::SendMessage(unsigned char** buffer_in){
     }else{
         // unencrypted message
         int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
-        unsigned char* buffer_two = (unsigned char *)calloc(-message_dim+sizeof(int32_t), sizeof(unsigned char));
         // init a buffer for the data
         *buffer_in = (unsigned char *)calloc(-message_dim+sizeof(int32_t), sizeof(unsigned char));
         memcpy(*buffer_in, &message_dim, sizeof(int32_t));
