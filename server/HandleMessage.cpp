@@ -105,6 +105,15 @@ int first_auth_message_handler(Message* message, ClientElement* user){
     string username(reinterpret_cast<char*>(username_buffer), data_buf_len-sizeof(int32_t));
     free(username_buffer);
     username_buffer = NULL;
+
+    // check if this client is already logged
+    // no double logins allowed!
+    if(get_user_by_id(username) != NULL){
+      fprintf(stderr, "first auth message: user already logged in.\n");
+      free(data_buffer);
+      data_buffer = NULL;
+      return -1;
+    }
     
     // add a mapping (username, clientelement) for this user
     // then populating the ClientElement object
@@ -115,13 +124,13 @@ int first_auth_message_handler(Message* message, ClientElement* user){
     free(data_buffer);
     data_buffer = NULL;
   }else{
-    fprintf(stderr, "first auth message: getdata\n");
+    fprintf(stderr, "first auth message: getdata.\n");
     free(data_buffer);
     data_buffer = NULL;
     return -1;
   }
   if(user->GenerateKeysForUser()){
-    fprintf(stderr, "DH Key generation failed\n");
+    fprintf(stderr, "DH Key generation failed.\n");
     return 1;
   }
   // build reply for the client
