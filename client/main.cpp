@@ -110,6 +110,8 @@ int main(int argc, char **argv){
 
 	cout << "Connected" << endl;
 
+
+
 	//authentication of the client
 	auth(cl_id, sessionVariables->cl_prvkey, sessionVariables->cl_pubkey, sessionVariables->sockfd, &(sessionVariables->sv_session_key), store);
   
