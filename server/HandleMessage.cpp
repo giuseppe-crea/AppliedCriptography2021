@@ -461,6 +461,8 @@ int serialize_active_clients(unsigned char** buffer, string requester){
   }
   *buffer = (unsigned char*)calloc(cursor, sizeof(unsigned char));
   memcpy(*buffer, tmpBuffer, cursor);
+  free(tmpBuffer);
+  tmpBuffer = NULL;
   return cursor;
 }
 
@@ -472,6 +474,8 @@ int list_request_handler(ClientElement* user, Message* message){
   ret += reply->SetCounter(user->GetCounterTo());
   ret += reply->SetOpCode(list_code);
   ret += reply->setData(data_buffer, data_buf_len);
+  free(data_buffer);
+  data_buffer = NULL;
   ret += reply->Encode_message(user->GetSessionKey());
   if(ret == 0)
     ret += user->Enqueue_message(reply);
