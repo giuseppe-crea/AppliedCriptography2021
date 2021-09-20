@@ -69,13 +69,16 @@ ClientElement* get_user_by_socket(int socket){
 int quick_message(ClientElement* target, int opCode){
     // notify partner the chat has been aborted
     int ret = 0;
-    Message* reply = new Message();
-    ret += reply->SetCounter(target->GetCounterTo());
-    ret += reply->SetOpCode(opCode);
-    ret += reply->setData(NULL, 0);
-    ret += reply->Encode_message(target->GetSessionKey());
-    ret += target->Enqueue_message(reply);
-    return ret;
+    if(target != NULL){
+      Message* reply = new Message();
+      ret += reply->SetCounter(target->GetCounterTo());
+      ret += reply->SetOpCode(opCode);
+      ret += reply->setData(NULL, 0);
+      ret += reply->Encode_message(target->GetSessionKey());
+      ret += target->Enqueue_message(reply);
+      return ret;
+    }
+    return -1;
 }
 
 int end_chat_handler(ClientElement* user, Message* message){
@@ -388,7 +391,7 @@ int chat_request_accepted_handler(Message* message, ClientElement* user){
   if(ret == 0)
     ret += send_peer_pubkey(partner, chat_request_accept_code);
   else
-    return quick_message(partner, chat_request_denied_code);
+    quick_message(partner, chat_request_denied_code);
   return 0;
 }
 
@@ -397,7 +400,8 @@ int chat_request_denied_handler(Message* message, ClientElement* user){
   if(partner != NULL){
     user->SetPartnerName("");
     partner->SetPartnerName("");
-    return quick_message(partner, chat_request_denied_code);
+    quick_message(partner, chat_request_denied_code);
+    return 0;
   }
   return -1;
 }
