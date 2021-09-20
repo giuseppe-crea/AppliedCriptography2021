@@ -22,8 +22,11 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	int32_t ret = first_m->SendUnencryptedMessage(sockfd);
 	if(ret == -1){
 		printf("Error in AUTHENTICATION: impossible to send first authentication message.\n");
+		free(buffer);
+		delete(first_m);
 		exit(-1);
 	}
+
 	cout << "CHECK 1 in auth: first authentication message sent." << endl;
 	free(buffer);
 	delete(first_m);
@@ -32,18 +35,23 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	//(negative to distinguish from encrytped message)
 	int32_t nbytes;
 	nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
+
 	if(nbytes != sizeof(int32_t) || buffer_bytes > 0){
 		printf("Error in AUTHENTICATION: impossible to read the dimension of the second authentication message.\n");
 		exit(-1);
 	}
+
 	cout << "CHECK 2 in auth: received dimension of second authentication message." << endl;
 	buffer = (unsigned char*)calloc(-buffer_bytes,sizeof(unsigned char));
 	cout << buffer_bytes << endl;
 	nbytes = recv(sockfd, buffer, -buffer_bytes, 0);
+
 	if(nbytes != -buffer_bytes){
 		printf("Error in AUTHENTICATION: impossible to read the whole second authentication message.\n");
+		free(buffer);
 		exit(-1);
 	}
+
 	cout << "CHECK 3 in auth: received the whole second authentication message." << endl;
 	Message* second_m = new Message();
 	second_m->Unwrap_unencrypted_message(buffer, -buffer_bytes);
@@ -52,6 +60,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 
 	if(second_m->GetOpCode() != second_auth_msg_code){
 		printf("Error in AUTHENTICATION: the message received is not a second authentication message.\n");
+		delete(second_m);
 		exit(-1);
 	}
 
@@ -230,4 +239,5 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 
 		}
 	}
+
 };

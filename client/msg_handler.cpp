@@ -121,7 +121,9 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
   }
   //error if the counter of received messages from server and the counter stored in the message don't correspond
   else {
-      perror("COUNTER");
+      delete(peer->receiving_msg);
+      peer->receiving_msg = NULL;
+      printf("The COUNTER in received message from server is wrong.\n");
       return -1;
     }
   }
@@ -140,5 +142,6 @@ int sent_message_handler(struct session_variables* sessionVariables, peer_t *pee
   while(dequeue(&(peer->send_buffer), &msg) == 0){
     msg->SendMessage(sessionVariables->sockfd, &(sessionVariables->counterAS));
   }
+  delete(msg);
   return 0;
 }

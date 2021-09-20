@@ -1,5 +1,7 @@
 #include "auth.cpp"
 
+
+
 struct session_variables{
     unsigned char* peer_session_key;
     unsigned char* sv_session_key;
@@ -15,7 +17,6 @@ struct session_variables{
     EVP_PKEY* peer_public_key;
     EVP_PKEY* cl_dh_prvkey;
 };
-
 
 // functions handling different messages
 // function to handle chat request message

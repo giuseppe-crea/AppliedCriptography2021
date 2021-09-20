@@ -93,7 +93,6 @@ typedef struct {
    * In case we doesn't send whole message per one call send().
    * And current_sending_byte is a pointer to the part of data that will be send next call.
    */
-  Message* sending_msg;
   
   /* The same for the receiving message. */
   Message* receiving_msg;
@@ -101,9 +100,27 @@ typedef struct {
 
 int delete_peer(peer_t *peer)
 {
-  close(peer->socket);
   dequeue_all(&(peer->send_buffer));
   return 0;
+}
+
+void goodbye(struct session_variables* sessionVariables, peer_t* server,int ex){
+    free(sessionVariables->cl_prvkey);
+    free(sessionVariables->cl_pubkey);
+    free(sessionVariables->peer_public_key);
+    free(sessionVariables->cl_dh_prvkey);
+    free(sessionVariables->peer_session_key);
+    free(sessionVariables->sv_session_key);
+    sessionVariables->cl_prvkey=NULL;
+    sessionVariables->cl_pubkey=NULL;
+    sessionVariables->peer_public_key=NULL;
+    sessionVariables->cl_dh_prvkey=NULL;
+    sessionVariables->peer_session_key=NULL;
+    sessionVariables->sv_session_key=NULL;
+    close(sessionVariables->sockfd);
+    free(sessionVariables);
+    delete_peer(server);
+    exit(ex);
 }
 
 char *peer_get_addres_str(peer_t *peer)

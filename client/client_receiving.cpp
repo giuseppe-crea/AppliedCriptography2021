@@ -615,13 +615,20 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
     int32_t total_size;
     memcpy(&total_size, message, sizeof(int32_t));
 
-    if(message_dim != total_size+sizeof(int32_t))
+    if(message_dim != total_size+sizeof(int32_t)){
         printf("Received bad peer message!!\n");
+        delete(m_from_peer);
+        return;
+    }
 
     m_from_peer->Decode_message(message+sizeof(int32_t), total_size, sessionVariables->peer_session_key);
 
-    if(m_from_peer->GetOpCode() != peer_message_code || m_from_peer->GetCounter() != sessionVariables->counterBA)
-        perror("MESSAGE_FROM_PEER");
+    if(m_from_peer->GetOpCode() != peer_message_code || m_from_peer->GetCounter() != sessionVariables->counterBA){
+        printf("Error in MESSAGE_FROM_PEER: wrong opcode or counter.\n");
+        delete(m_from_peer);
+        return;
+    }
+
     unsigned char* buffer;
     int32_t buffer_bytes;
     buffer = m_from_peer->getData(&buffer_bytes);

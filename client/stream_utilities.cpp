@@ -66,7 +66,7 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
     string first_word = input_buffer.substr(0,input_buffer.find(' '));
     cout << first_word << endl;
 
-    bool ret;
+    bool ret = false;
     Message* msg = NULL;
     //checks if the first word is a command
     if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), list_request_cmd.c_str())==0)
@@ -84,9 +84,7 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         }
     }
     else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){
-        ret = prepare_msg_to_server(logout_code, sessionVariables, NULL, 0, &msg);
-        close(sessionVariables->sockfd);
-        exit(-2);
+        goodbye(sessionVariables,peer,-1);
     }
     else if (sessionVariables->chatting && strcmp(first_word.c_str(), end_chat_cmd.c_str())==0){
         ret = prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg);

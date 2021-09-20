@@ -97,13 +97,20 @@ int32_t Message::Encode_message(unsigned char* key){
     cursor += sizeof(int32_t);
     memcpy(pt+cursor, &this->counter, sizeof(int32_t));
     cursor += sizeof(int32_t);
+
     if(this->data_dim != 0){
         memcpy(pt+cursor, this->data, this->data_dim);
         cursor += this->data_dim;
     }
+
     unsigned char* tmpCiphertext = (unsigned char*)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
-    if(this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, tmpCiphertext, this->ct_tag)))
+
+    if(this->SetCtLen(gcm_encrypt(pt, cursor, NULL, 0, key, this->iv, 12, tmpCiphertext, this->ct_tag))){
+        free(tmpCiphertext);
+        free(pt);
         return -1;
+    }
+
     this->ct = (unsigned char*)calloc(this->ct_len, sizeof(unsigned char));
     memcpy(this->ct, tmpCiphertext, this->ct_len);
     free(tmpCiphertext);
@@ -120,6 +127,7 @@ void Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_siz
     unsigned char* data_buffer = (unsigned char *)malloc(data_size_buffer-cursor);
     memcpy(data_buffer, buffer+cursor, data_size_buffer-cursor);
     this->setData(data_buffer, data_size_buffer-cursor);
+    free(data_buffer);
 }
 
 int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key){
@@ -142,9 +150,15 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     // decryption
     unsigned char* pt_buffer = (unsigned char *)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
-    if(dataLen <= 0)
-        perror("Negative data length");
-    
+    if(dataLen <= 0){
+        printf("Negative data length\n");
+        free(pt_buffer);
+        free(data_buffer);
+        free(tag_buffer);
+        free(iv_buffer);
+        return -1;
+    }
+
     cursor = 0;
     memcpy(&opCode, pt_buffer, sizeof(int32_t));
     cursor += sizeof(int32_t);
@@ -152,9 +166,17 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     memcpy(&counter, pt_buffer+cursor, sizeof(int32_t));
     cursor += sizeof(int32_t);
     this->SetCounter(counter);
-    if(this->setData(pt_buffer+cursor, dataLen-cursor)!=0)
-        perror("Error in setting data");
+    if(this->setData(pt_buffer+cursor, dataLen-cursor)!=0){
+        free(pt_buffer);
+        free(data_buffer);
+        free(tag_buffer);
+        free(iv_buffer);
+        printf("Error in setting data");
+    }
     free(pt_buffer);
+    free(data_buffer);
+    free(tag_buffer);
+    free(iv_buffer);
     return 0;
 }
 
@@ -181,9 +203,12 @@ int32_t Message::SendMessage(int socketID, unsigned int* counter){
         c++; 
         *counter = c;
         printf("%d\n", *counter);
+        free(buffer);
         return 0;
-    }else 
+    }else{ 
+        free(buffer);
         return -1;
+    }
 }
 
 int32_t Message::SendUnencryptedMessage(int socketID){
@@ -199,7 +224,10 @@ int32_t Message::SendUnencryptedMessage(int socketID){
     cursor += this->data_dim;
 
     if(send(socketID, output_buffer, cursor, 0)){
+        free(output_buffer);
         return 0;
-    }else 
+    }else {
+        free(output_buffer);
         return -1;
+    }
 };
