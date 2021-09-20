@@ -105,10 +105,10 @@ int delete_peer(peer_t *peer)
 }
 
 void goodbye(struct session_variables* sessionVariables, peer_t* server,int ex){
-    free(sessionVariables->cl_prvkey);
-    free(sessionVariables->cl_pubkey);
-    free(sessionVariables->peer_public_key);
-    free(sessionVariables->cl_dh_prvkey);
+    EVP_PKEY_free(sessionVariables->cl_prvkey);
+    EVP_PKEY_free(sessionVariables->cl_pubkey);
+    EVP_PKEY_free(sessionVariables->peer_public_key);
+    EVP_PKEY_free(sessionVariables->cl_dh_prvkey);
     free(sessionVariables->peer_session_key);
     free(sessionVariables->sv_session_key);
     sessionVariables->cl_prvkey=NULL;

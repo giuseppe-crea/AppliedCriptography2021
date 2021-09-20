@@ -233,6 +233,9 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			EVP_DigestUpdate(hash_ctx,secret,secret_length);
 			EVP_DigestFinal(hash_ctx,*sv_session_key,&sv_session_key_length);
 
+			EVP_PKEY_free(sv_dh_pubkey);
+			EVP_PKEY_free(peer_dh_prvkey);
+			X509_free(serv_cert);
 			memset(secret,0,secret_length);
 			free(secret);
 			BIO_free(peer_dh_pubkey_pem);
