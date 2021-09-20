@@ -61,6 +61,7 @@ bool chat_request_accepted(unsigned char* data, int data_dim, struct session_var
     if(prepare_msg_to_server(nonce_msg_code, sessionVariables, buffer, buffer_dim, &msg))
         *m = msg;
     else{
+        delete(msg);
         free(buffer);
         return false;
     }
@@ -236,6 +237,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     if(!rtrn){
         EVP_PKEY_free(sessionVariables->cl_dh_prvkey);
         sessionVariables->cl_dh_prvkey = NULL;
+        delete(msg);
     }
 
     BIO_free(cl_dh_pubkey_pem);
@@ -403,6 +405,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
         free(pt);
         BIO_free(peer_pem);
         BIO_free(cl_dh_pubkey_pem);
+        delete(msg);
         return false;
     }
     
@@ -437,6 +440,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     // deriving
     secret = (unsigned char*)calloc(secret_length,sizeof(unsigned char));
     EVP_PKEY_derive(kd_ctx,secret,&secret_length);
+    EVP_PKEY_CTX_free(kd_ctx);
 
     // hashing the secret to produce session key through SHA-256 (aes key: 16byte or 24byte or 32byte)
     EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
@@ -446,6 +450,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     EVP_DigestInit(hash_ctx,EVP_sha256());
     EVP_DigestUpdate(hash_ctx,secret,secret_length);
     EVP_DigestFinal(hash_ctx,sessionVariables->peer_session_key, &peer_session_key_length);
+    EVP_MD_CTX_free(hash_ctx);
 
     memset(secret, 0, secret_length);
     free(secret);

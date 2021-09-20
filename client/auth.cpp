@@ -77,7 +77,6 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	int sign_size;
 	X509* serv_cert = NULL;
 
-	
 	cout << "CHECK 5 in auth: no errors in declaring BIO objects." << endl;
 	buffer = second_m->getData(&buffer_bytes);
 	long read_dim = 0; // counts the number of bytes read from message
@@ -91,7 +90,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	BIO_write(sv_pem, buffer + read_dim, sv_pem_size);
 	unsigned char* new_pem_buffer = (unsigned char*)calloc(sv_pem_size,sizeof(unsigned char));
 	memcpy(new_pem_buffer, buffer+read_dim, sv_pem_size);
-	cout << "Server Pem read" << endl;
+	/*cout << "Server Pem read" << endl;
 	for(int ieti = 0; ieti < sv_pem_size ; ieti++){
 		cout << (int)(buffer[read_dim+ieti]);
 		if(ieti==sv_pem_size-1)
@@ -102,7 +101,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 		cout << (int)(new_pem_buffer[ieti]);
 		if(ieti==sv_pem_size-1)
 			cout << endl;
-	}
+	}*/
 	read_dim += sv_pem_size;
 	memcpy(&sign_size, buffer + read_dim, sizeof(int32_t));
 	read_dim += sizeof(int32_t);
@@ -134,8 +133,8 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 		cout << "CHECK 6 in auth: the received certificate is correct.\n" << endl;
 		//verifies the signature and generates a session key
 		if(verify_sign(sv_pub_key, sv_pem_buffer, na, sv_pem_dim, sv_sign, sign_size)){
-			//TODO: elliptic curve functions: dh key generation and session key derivation
-			// load elliptic curve parameters
+			
+			EVP_PKEY_free(sv_pub_key);
 			sv_dh_pubkey = PEM_read_bio_PUBKEY(sv_pem,NULL,NULL,NULL);
 			BIO_free(sv_pem);
 			EVP_PKEY* dh_params = NULL;
@@ -223,6 +222,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			// deriving
 			secret = (unsigned char*)calloc(secret_length,sizeof(unsigned char));
 			EVP_PKEY_derive(kd_ctx,secret,&secret_length);
+			EVP_PKEY_CTX_free(kd_ctx);
 
 			// hashing the secret to produce session key through SHA-256 (aes key: 32byte)
 			EVP_MD_CTX* hash_ctx = EVP_MD_CTX_new();
@@ -232,6 +232,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			EVP_DigestInit(hash_ctx,EVP_sha256());
 			EVP_DigestUpdate(hash_ctx,secret,secret_length);
 			EVP_DigestFinal(hash_ctx,*sv_session_key,&sv_session_key_length);
+			EVP_MD_CTX_free(hash_ctx);
 
 			EVP_PKEY_free(sv_dh_pubkey);
 			EVP_PKEY_free(peer_dh_prvkey);
