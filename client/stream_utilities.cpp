@@ -77,10 +77,10 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         else{
             string recipient_id;
             stringstream ss;
-            string recipient = input_buffer.substr(6,input_buffer.find(' '));
+            string recipient = input_buffer.substr(input_buffer.find(' ')+1, input_buffer.size()-input_buffer.find(' '));
             ss << recipient;
             ss >> recipient_id;
-            ret = prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size()+1, &msg);
+            ret = prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size(), &msg);
         }
     }
     else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){

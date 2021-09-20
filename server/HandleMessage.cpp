@@ -504,7 +504,8 @@ int close_client_connection(ClientElement *client)
       }
       client->SetPartnerName("");
     }
-    connectedClientsByUsername.erase(username);
+    if(strcmp(username.c_str(),"") != 0)
+      connectedClientsByUsername.erase(username);
     delete(client);
     return 0;
   }

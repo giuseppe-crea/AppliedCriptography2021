@@ -9,14 +9,21 @@ ClientElement::ClientElement()
     unsent_bytes = 0;
     current_sending_byte = -1;
     pri_dh_key = NULL;
+    public_key = NULL;
     sessionKey = NULL;
+    unsent_buffer = NULL;
+    pub_dh_key_to_send = NULL;
+    peer_dh_pubkey_pem = NULL;
+    
 }
 	
 ClientElement::~ClientElement()
 {
 	free(sessionKey);
-    free(pub_dh_key_to_send);
-    free(unsent_buffer);
+    if(pub_dh_key_to_send != NULL)
+        free(pub_dh_key_to_send);
+    if(unsent_buffer != NULL)
+        free(unsent_buffer);
     if(peer_dh_pubkey_pem != NULL){
         BIO_free(peer_dh_pubkey_pem);
         peer_dh_pubkey_pem = NULL;
