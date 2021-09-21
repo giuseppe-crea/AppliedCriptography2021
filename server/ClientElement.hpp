@@ -25,8 +25,6 @@ class ClientElement
 		long received_dh_key_size;
 		unsigned char* pub_dh_key_to_send;
 		BIO* peer_dh_pubkey_pem;
-		// BIO* pub_dh_key_received;
-		// EVP_PKEY* pub_dh_key;
 		EVP_PKEY* pri_dh_key;
 		EVP_PKEY* public_key;
 		// list of Message elements still to send
@@ -65,8 +63,6 @@ class ClientElement
 		void SetSocketID(int socket);
 		EVP_PKEY* GetPrivateDHKey();
 		BIO* GetOurPublicDHKey();
-		// BIO* GetPeerPublicDHKey();
-		// int SetPeerPublicDHKey(BIO* key, long keysize);
 		long GetToSendPubDHKeySize();
 		long GetReceivedPubDHKeySize();
 		EVP_PKEY* GetPublicKey();

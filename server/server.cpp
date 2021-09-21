@@ -10,7 +10,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-//#include "global.h"
 #include "HandleMessage.cpp"
 #define getName(var)  #var
 #define NO_SOCKET -1
@@ -95,7 +94,7 @@ int start_listen_socket(int *listen_sock)
 void shutdown_properly(int code)
 {
   int i;
-  
+  std::printf("Shutting the server down properly...\n");
   close(listen_sock);
 
   map<int, ClientElement*>::iterator it;
@@ -105,7 +104,7 @@ void shutdown_properly(int code)
   connectedClientsBySocket.clear();
   connectedClientsByUsername.clear();
 
-  std::printf("Shutdown server properly.\n");
+  std::printf("Done!\n");
   exit(code);
 }
 
@@ -123,7 +122,6 @@ int build_fd_sets(fd_set *read_fds, fd_set *write_fds, fd_set *except_fds)
   for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); it++)
     if (it->second->Size_pending_messages() > 0){
       FD_SET(it->first, write_fds);
-      printf("[build_fd_sets] Added socket #%d\n", it->first);
     }
   
   FD_ZERO(except_fds);
@@ -154,6 +152,7 @@ int handle_new_connection()
     ClientElement* newClient = new ClientElement();
     connectedClientsBySocket.insert(std::pair<int, ClientElement*>(new_client_sock, newClient));
     newClient->SetSocketID(new_client_sock);
+    printf("Accepted new connection on socket #%d\n", new_client_sock);
     return 0;
   }
   
@@ -169,11 +168,6 @@ int main(int argc, char **argv)
   
   if (start_listen_socket(&listen_sock) != 0)
     exit(EXIT_FAILURE);
-  
-  /* Set nonblock for stdin. */
-  int flag = fcntl(STDIN_FILENO, F_GETFL, 0);
-  flag |= O_NONBLOCK;
-  fcntl(STDIN_FILENO, F_SETFL, flag);
   
   int i;
   
@@ -204,7 +198,7 @@ int main(int argc, char **argv)
  
       case 0:
         // you should never get here
-        std::printf("select() returns 0.\n");
+        std::printf("select() returned 0.\n");
         shutdown_properly(EXIT_FAILURE);
       
       default:
@@ -212,12 +206,6 @@ int main(int argc, char **argv)
         if (FD_ISSET(listen_sock, &read_fds)) {
           handle_new_connection();
         }
-        
-        if (FD_ISSET(STDIN_FILENO, &except_fds)) {
-          std::printf("except_fds for stdin.\n");
-          shutdown_properly(EXIT_FAILURE);
-        }
-
         if (FD_ISSET(listen_sock, &except_fds)) {
           std::printf("Exception listen socket fd.\n");
           shutdown_properly(EXIT_FAILURE);
@@ -225,7 +213,6 @@ int main(int argc, char **argv)
         
         map<int, ClientElement*>::iterator it;
         for (it = connectedClientsBySocket.begin(); it != connectedClientsBySocket.end(); ){
-          fprintf(stderr, "checking socket number %d\n", it->first);
           if (FD_ISSET(it->first, &read_fds)) {
             if (receive_from_peer(it->second) != 0) {
               close_client_connection(it->second);
@@ -237,8 +224,8 @@ int main(int argc, char **argv)
           if (FD_ISSET(it->first, &write_fds)) {
             if (send_to_peer(it->second) != 0) {
               if(close_client_connection(it->second) == -1){
+                // impossible case
                 close(it->first);
-                fprintf(stderr, "We really shouldn't be here.\n");  
               }
               connectedClientsBySocket.erase(it++);
               continue;
@@ -255,7 +242,7 @@ int main(int argc, char **argv)
         }
     }
     
-    std::printf("And we are still waiting for clients' or stdin activity. You can type something to send:\n");
+    std::printf("[Main Loop] Still scanning...\n");
   }
  
   return 0;

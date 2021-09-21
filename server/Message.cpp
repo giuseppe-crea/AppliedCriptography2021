@@ -88,9 +88,8 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
 int32_t Message::getData(unsigned char** buffer, int32_t* datadim){
     if(this->data != NULL){
         *datadim = this->data_dim;
-        printf("[getData]: Allocating buffer.\n");
-        *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char)); //TODO: NEEDS A FREE
-        printf("[getData]: Copying into buffer %d bytes.\n", this->data_dim);
+        // This buffer must be free'd within the caller of getData
+        *buffer = (unsigned char*)malloc(this->data_dim*sizeof(unsigned char)); 
         memcpy(*buffer, this->data, this->data_dim);
         return 0;
     }else
@@ -156,7 +155,6 @@ bool Message::Unwrap_unencrypted_message(unsigned char* buffer, int32_t data_siz
 // data will be decrypted plaintext
 bool Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigned char* key){
     int32_t cursor = 0;
-    // init a buffer for the data
     int32_t opCode;
     int32_t counter;
     int32_t data_size_buffer = buff_len - STATIC_POSTFIX;
@@ -219,7 +217,6 @@ int32_t Message::SendMessage(unsigned char** buffer_in){
         // copy IV
         memcpy(*buffer_in+cursor, this->iv, 12);
         cursor += 12;
-        // cout << "Sending this many bytes of payload total: " << totalSize << endl;
     }else{
         // unencrypted message
         int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
@@ -233,31 +230,6 @@ int32_t Message::SendMessage(unsigned char** buffer_in){
         cursor += this->data_dim;
     }
     return cursor;
-}
-/*
-int32_t Message::SendUnencryptedMessage(int socketID){
-    int32_t message_dim = -(sizeof(int32_t)+this->data_dim);
-    int32_t cursor = 0;
-    // init a buffer for the data
-    unsigned char* output_buffer = (unsigned char *)malloc(-message_dim+sizeof(int32_t));
-    memcpy(output_buffer, &message_dim, sizeof(int32_t));
-    cursor += sizeof(int32_t);
-    memcpy(output_buffer+cursor, &this->op_code, sizeof(int32_t));
-    cursor += sizeof(int32_t);
-    memcpy(output_buffer+cursor, this->data, this->data_dim);
-    cursor += this->data_dim;
-
-    if(send(socketID, output_buffer, cursor, 0)){
-        return 0;
-    }else 
-        return -1;
-};
-*/
-int Message::GetRealMessageSize(){
-    if(encrypted){
-        return sizeof(int32_t)+this->data_dim+STATIC_POSTFIX;
-    }else
-        return sizeof(int32_t)*2 +this->data_dim;
 }
 
 bool Message::isEncrypted(){

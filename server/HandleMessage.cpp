@@ -1,5 +1,4 @@
 #include <map>
-//#include "global.h"
 #include "ClientElement.cpp"
 #include "signature_utilities.cpp"
 
@@ -31,27 +30,7 @@ EVP_PKEY* load_server_private_key(){
 }
 
 ClientElement* get_user_by_id(string id){
-    map<string, ClientElement*>::iterator tmpIterator = connectedClientsByUsername.find(id);
-    
-    map<string, ClientElement*>::iterator it;
-    for(it = connectedClientsByUsername.begin(); it != connectedClientsByUsername.end(); it++){
-      cout << "Comparing key:\""<< it->first << "\" with id:\"" << id << "\": " << it->first.compare(id) << endl;;
-      cout << "key has size " << it->first.size();
-      cout << " while id has size " << id.size() << endl;
-      cout << "Printing individual characters of key as int..." << endl;
-      for(int i = 0; i < it->first.size(); i++){
-        cout << (int)it->first.c_str()[i] << " ";
-        if(i == it->first.size()-1)
-          cout << endl;
-      }
-      cout << "Printing individual characters of id as int..." << endl;
-      for(int i = 0; i < id.size(); i++){
-        cout << (int)id.c_str()[i] << " ";
-        if(i == id.size()-1)
-          cout << endl;
-      }
-    }
-    
+    map<string, ClientElement*>::iterator tmpIterator = connectedClientsByUsername.find(id);   
     if(tmpIterator != connectedClientsByUsername.end()){
         return tmpIterator ->second;
     }
@@ -710,8 +689,6 @@ int receive_from_peer(ClientElement* user)
       std::printf("[%d] Handling unencrypted message...\n", user->GetSocketID());
     else
       std::printf("[%s] Handling unencrypted message...\n", user->GetUsername().c_str());
-    // TODO: Handle it
-    // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
   }
   if(encrypted){
     if(!rcv_msg->Decode_message(buffer, len_to_receive, user->GetSessionKey())){
@@ -719,16 +696,9 @@ int receive_from_peer(ClientElement* user)
       buffer = NULL;
       return -1;
     }
-    // Vestigial code? All HandleMessage calls have their own get data call within, no idea what this was for
-    // commenting it out for now
-    // int data_dim;
-    // unsigned char* data;
-    // rcv_msg->getData(&data, &data_dim);
     if(rcv_msg->GetCounter() == user->GetCounterFrom()){
       user->IncreaseCounterFrom();
       std::printf("[%s] Handling encrypted message...\n", user->GetUsername().c_str());
-      // TODO: Handle it
-      // HandleMessage(sv_pr_key, SV_cert, message, user, &error_code)
     }else{
       fprintf(stderr,"[%s] Counter mismatch, dropping.\n", user->GetUsername().c_str());
       free(buffer);
@@ -803,12 +773,11 @@ int send_to_peer(ClientElement* user)
         return -1;
       }
     }
-    // we have read as many as possible
+    // we have read as much as possible
     else if (sent_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
       break;
     }
     else if (sent_count == 0) {
-      printf("send()'ed 0 bytes. It seems that peer can't accept data right now. Try again later.\n");
       break;
     }
     else if (sent_count > 0) {

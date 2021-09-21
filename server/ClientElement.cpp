@@ -28,16 +28,6 @@ ClientElement::~ClientElement()
         BIO_free(peer_dh_pubkey_pem);
         peer_dh_pubkey_pem = NULL;
     }
-    /*
-    if(pub_dh_key_received != NULL){
-        BIO_free(pub_dh_key_received);
-        pub_dh_key_received = NULL;
-    }
-    if(pub_dh_key != NULL){
-        EVP_PKEY_free(pub_dh_key);
-        pub_dh_key = NULL;
-    }
-    */
     if(pri_dh_key != NULL){
         EVP_PKEY_free(pri_dh_key);
         pri_dh_key = NULL;
@@ -88,7 +78,6 @@ std::string ClientElement::GetPartnerName(){
 
 void ClientElement::SetNonceReceived(int32_t nonce){
     nonce_received = nonce;
-    std::printf("Nonce set.\n");
 }
 
 int32_t ClientElement::GetNonceReceived(){
@@ -159,14 +148,10 @@ int ClientElement::GenerateKeysForUser(){
 
     EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx,NID_X9_62_prime256v1);
 
-    fprintf(stderr,"Initializing elliptic curve environment.");
-
     EVP_PKEY_paramgen(pctx,&dh_params);
 
     
     EVP_PKEY_CTX_free(pctx);
-    
-    fprintf(stderr,"Starting key generation.");
 
     // create my DH key for this user
     EVP_PKEY_CTX* kg_ctx = EVP_PKEY_CTX_new(dh_params, NULL);
@@ -174,29 +159,17 @@ int ClientElement::GenerateKeysForUser(){
     int ret_pv = EVP_PKEY_keygen(kg_ctx,&pri_dh_key);
     EVP_PKEY_CTX_free(kg_ctx);
     EVP_PKEY_free(dh_params);
-    std::printf("Starting key sharing.");
 
     // save public key in pem format in a memory BIO
     peer_dh_pubkey_pem = BIO_new(BIO_s_mem());
     int ret_pb = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,pri_dh_key);
-    // save private key the same way
-    // BIO* peer_dh_prvkey_pem = BIO_new(BIO_s_mem());
-    // int ret_pv = PEM_write_bio_PrivateKey(peer_dh_prvkey_pem,peer_dh_prvkey);
-    // check for errors during serialization
-    if(ret_pb == 0 || ret_pv == 0){
-        std::string type = ret_pb == 0 ? "public" : "private";
-        std::string error = "Error serializing my own "+type+" DH-K PEM for user "+ user_id +".";
-        perror(error.c_str());
-        return -1;
-    }
+
     unsigned char* pub_dh_key_to_send_buffer;
     // save the key we send the user as BIO, and the private key we generate for that user as PEM
     this->tosend_dh_key_size = BIO_get_mem_data(peer_dh_pubkey_pem, &pub_dh_key_to_send_buffer);
-    std::printf("GenerateKeysForUsers about memcpy.");
     pub_dh_key_to_send = (unsigned char*)malloc(tosend_dh_key_size);
     
     memcpy(pub_dh_key_to_send,pub_dh_key_to_send_buffer,tosend_dh_key_size);
-    std::printf("[GenerateKeysForUsers] tosend_dh_key_size: %ld\n", tosend_dh_key_size);
     
     return 0;
 }
@@ -205,24 +178,6 @@ int ClientElement::GenerateKeysForUser(){
 unsigned char* ClientElement::GetToSendPubDHKey(){
     return pub_dh_key_to_send;
 }
-
-/*
-// returns a SHALLOW COPY. DO NOT FREE MANUALLY
-BIO* ClientElement::GetPeerPublicDHKey(){
-    return this->pub_dh_key_received;
-}
-
-// SETS A SHALLOW COPY. DO NOT FREE THE GIVEN KEY
-int ClientElement::SetPeerPublicDHKey(BIO* key, long keysize){
-    if(this->pub_dh_key_received == NULL){
-        if(key != NULL){
-            this->received_dh_key_size = BIO_get_mem_data(key,this->pub_dh_key_received);
-            return 0;
-        }
-    }
-    return 1;
-}
-*/
 
 long ClientElement::GetToSendPubDHKeySize(){
     return this->tosend_dh_key_size;
