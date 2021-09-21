@@ -118,6 +118,7 @@ int main(int argc, char **argv){
   int maxfd = sessionVariables->sockfd;
 
   printf("Waiting for server message or stdin input. Please, type text to be sent:\n");
+  bool tampered = false; 
 
   while (1) {
     // Select() updates fd_set's, so we need to build fd_set's before each select()call.
@@ -163,6 +164,10 @@ int main(int argc, char **argv){
               free(sessionVariables->peer_session_key);
               sessionVariables->peer_session_key = NULL;
             }
+            if(tampered){
+              printf("ERROR: too many bad messages have been received! Session shutdown.\n");
+              goodbye(sessionVariables,&server,-1);
+            } else tampered = true;
           }
         }
 
