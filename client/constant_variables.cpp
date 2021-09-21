@@ -4,6 +4,10 @@
 #include <openssl/evp.h>
 using namespace std;
 
+#define ANSI_COLOR_BLUE "\x1b[34m"
+#define ANSI_COLOR_RESET "\x1b[0m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+
 const int first_auth_msg_code = 290;
 const int second_auth_msg_code = 291;
 const int final_auth_msg_code = 292;

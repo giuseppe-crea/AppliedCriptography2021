@@ -35,7 +35,7 @@ int enqueue(struct message_queue **queue, Message* msg)
   struct message_queue* next_element = (struct message_queue*) calloc(sizeof(struct message_queue), sizeof(unsigned char));
   
   if(next_element == NULL){
-    printf("Error in enqueueing the message.\n");
+    printf("ERROR: failed to enqueue the message.\n");
     return -1;
   }
 
@@ -79,22 +79,14 @@ int dequeue_all(struct message_queue **queue)
   return 0;
 }
 
-// peer -----------------------------------------------------------------------
-
+// peer
 typedef struct {
   int32_t socket;
   struct sockaddr_in address;
   
-  /* Messages that waiting for send. */
+  //Messages that waiting for send.
   struct message_queue* send_buffer;
   
-  /* Buffered sending message.
-   * 
-   * In case we doesn't send whole message per one call send().
-   * And current_sending_byte is a pointer to the part of data that will be send next call.
-   */
-  
-  /* The same for the receiving message. */
   Message* receiving_msg;
 } peer_t;
 
@@ -104,6 +96,7 @@ int delete_peer(peer_t *peer)
   return 0;
 }
 
+//function to logout the user and free memory before exit
 void goodbye(struct session_variables* sessionVariables, peer_t* server,int ex){
     EVP_PKEY_free(sessionVariables->cl_prvkey);
     EVP_PKEY_free(sessionVariables->cl_pubkey);
@@ -121,20 +114,4 @@ void goodbye(struct session_variables* sessionVariables, peer_t* server,int ex){
     free(sessionVariables);
     delete_peer(server);
     exit(ex);
-}
-
-char *peer_get_addres_str(peer_t *peer)
-{
-  static char ret[INET_ADDRSTRLEN + 10];
-  char peer_ipv4_str[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &(peer->address.sin_addr), peer_ipv4_str, INET_ADDRSTRLEN);
-  sprintf(ret, "%s:%d", peer_ipv4_str, peer->address.sin_port);
-  
-  return ret;
-}
-
-int peer_add_to_send(peer_t *peer, Message* msg)
-{
-  return enqueue(&(peer->send_buffer), msg);
-
 }

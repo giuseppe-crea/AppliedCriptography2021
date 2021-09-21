@@ -15,7 +15,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 	FILE* pem_cl_prvkey = fopen(prvkey_file.c_str(),"r");
 	FILE* pem_cl_pubkey = fopen(pubkey_file.c_str(),"r");
 	if(pem_cl_prvkey==NULL || pem_cl_pubkey == NULL){
-		printf("Unavailable keys.");
+		printf("ERROR: Unavailable keys.");
     return false;
   }
 
@@ -46,7 +46,7 @@ int main(int argc, char **argv){
   sessionVariables->cl_dh_prvkey=NULL;
   sessionVariables->peer_session_key=NULL;
   sessionVariables->sv_session_key=NULL;
-
+  
   peer_t server;
   memset(&server, 0, sizeof(server));
 
@@ -56,61 +56,54 @@ int main(int argc, char **argv){
 	int server_port = 9034;
 	cout << "Who are you?" << endl;
 	cin >> cl_id;
-	cout << "Please insert password" << endl;
+	cout << "Please insert password:" << endl;
 	cin >> password;
-	//cout << "Please insert server port" << endl;
-	//cin >> server_port;
-	//cout << "Enter the server's address:" << endl;
-	//cin >> server_address;
 
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
 	FILE *fp_CA_cert = fopen("keys/ca_cert.pem", "r"); 
 	if(!fp_CA_cert){
-		printf("CA certificate pem file not found!\n");
+		printf("ERROR: CA certificate pem file not found!\n");
 		goodbye(sessionVariables,&server,-1);
 	}
 	X509* CA_cert = PEM_read_X509(fp_CA_cert, NULL, NULL, NULL);
 	X509_STORE_add_cert(store, CA_cert);
 	fclose(fp_CA_cert);
 
-  
-
+  //trying to open keys for user using the given password from stdin
 	if(!get_keys(cl_id,password,&sessionVariables->cl_pubkey,&sessionVariables->cl_prvkey)){
-		printf("Impossible to fetch keys for the user from pem files.\n");
+		printf("ERROR: Impossible to fetch keys for the user from pem files.\n");
 		goodbye(sessionVariables,&server,-3);;
 	}
 
-  
 	// connect to server
-
   server.address.sin_family = AF_INET;
 	server.address.sin_port = htons(server_port);
 
 	if(inet_pton(AF_INET,"127.0.0.1", &server.address.sin_addr)<=0){
-		printf("Error in convertion of ip address.\n");
+		printf("ERROR: wrong convertion of ip address.\n");
 		goodbye(sessionVariables,&server,-1);;
 	};
 
-	cout << "Address is set" << endl;
+	cout << "Server address is set." << endl;
 	sessionVariables->sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sessionVariables->sockfd < 0){
-  	printf("ERROR in opening socket!\n");
+  	printf("ERROR: failure in opening socket!\n");
 		goodbye(sessionVariables,&server,-1);;
 	}
 
   server.socket = sessionVariables->sockfd;
-	cout << "Socket FD initialized" << endl;
+	cout << "Socket initialized." << endl;
 
 	if (connect(sessionVariables->sockfd,(struct sockaddr *) &server.address,sizeof(server.address)) < 0){
-    printf("ERROR connecting to server.\n");
+    printf("ERROR: denied connection to server.\n");
 		goodbye(sessionVariables,&server,-1);;
 	}
 
-	cout << "Connected" << endl;
+	printf(ANSI_COLOR_BLUE "Connected!\n" ANSI_COLOR_RESET);
 
-	//authentication of the client
+	//authentication of the client through the auth function
 	auth(cl_id, sessionVariables->cl_prvkey, sessionVariables->cl_pubkey, sessionVariables->sockfd, &(sessionVariables->sv_session_key), store);
   
    // Set nonblock for stdin. 
@@ -124,7 +117,7 @@ int main(int argc, char **argv){
 
   int maxfd = sessionVariables->sockfd;
 
-  printf("Waiting for server message or stdin input. Please, type text to send:\n");
+  printf("Waiting for server message or stdin input. Please, type text to be sent:\n");
 
   while (1) {
     // Select() updates fd_set's, so we need to build fd_set's before each select()call.
@@ -134,12 +127,12 @@ int main(int argc, char **argv){
     
     switch (activity) {
       case -1:
-        printf("Error in select().\n");
+        printf("ERROR: failed select().\n");
         goodbye(sessionVariables,&server,-1);;
 
       case 0:
         // you should never get here
-        printf("Error in select(): returns 0.\n");        
+        printf("ERROR: select() returns 0.\n");        
         goodbye(sessionVariables,&server,-1);
 
       default:
@@ -151,13 +144,13 @@ int main(int argc, char **argv){
         }
 
         if (FD_ISSET(STDIN_FILENO, &except_fds)) {
-          printf("except_fds for stdin.\n");
+          printf("ERROR: except_fds for stdin.\n");
           goodbye(sessionVariables,&server,-1);
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &read_fds)) {
           if (received_msg_handler(sessionVariables, &server) != 0){
-            printf("Bad message has been received, if you're in a chatting session, it's going to be closed for safety.\n");
+            printf("ERROR: Bad message has been received, if you're in a chatting session, it's going to be closed for safety.\n");
             if(sessionVariables->chatting){
               Message* msg = NULL;
               if(prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg))
@@ -180,11 +173,10 @@ int main(int argc, char **argv){
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &except_fds)) {
-          printf("except_fds for server.\n");
+          printf("ERROR: except_fds for server.\n");
           goodbye(sessionVariables,&server,-1);
         }
       }
-    printf("And we are still waiting for server or stdin activity. You can type something to send:\n");
     }
 
   return 0;

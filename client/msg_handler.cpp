@@ -2,9 +2,7 @@
 
 /* Receive message from peer and handle it with message_handler(). */
 int received_msg_handler(struct session_variables* sessionVariables, peer_t *peer)
-{
-  printf("Ready for recv() from %s.\n", peer_get_addres_str(peer));
-  
+{  
   size_t len_to_receive;
   ssize_t received_count;
   size_t received_total = 0;
@@ -22,17 +20,16 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
     
   
   // receiving the message
-  printf("Let's try to recv() %d bytes... ", buffer_size);
   buffer = (unsigned char*) calloc(buffer_size, sizeof(unsigned char));
 
   while (received_total < buffer_size){
     received_count = recv(peer->socket, buffer + received_total, buffer_size - received_total, MSG_DONTWAIT);
   if (received_count < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      printf("peer is not ready right now, try again later.\n");
+      printf("ERROR: peer is not ready right now, try again later.\n");
     }
     else {
-      printf("recv() from peer error\n");
+      printf("ERROR: failed recv() from peer.\n");
       return -1;
     }
   } 
@@ -41,15 +38,12 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
   }
   // If recv() returns 0, it means that peer gracefully shutdown. Shutdown client.
   else if (received_count == 0) {
-    printf("recv() 0 bytes. Peer gracefully shutdown.\n");
+    printf("ERROR: recv() 0 bytes. Peer gracefully shutdown.\n");
     return -1;
   }
   else if (received_count > 0) {
     received_total += received_count;
-    printf("recv() %zd bytes\n", received_count);
   }
-
-  printf("Total recv()'ed %zu bytes.\n", received_total);
 
   peer->receiving_msg = new Message();
   peer->receiving_msg->Decode_message(buffer, buffer_size, sessionVariables->sv_session_key);
@@ -65,7 +59,7 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
       //adds message count to the ones received from the server
       sessionVariables->counterSA++;
       //checks message header to choose which function to call based on the type of message received
-      cout << "Received Message with OP Code: " << peer->receiving_msg->GetOpCode() << endl;
+      //cout << "Received Message with OP Code: " << peer->receiving_msg->GetOpCode() << endl;
       Message* m = NULL;
       switch(peer->receiving_msg->GetOpCode()){
           case chat_request_received_code:
@@ -123,7 +117,7 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
   else {
       delete(peer->receiving_msg);
       peer->receiving_msg = NULL;
-      printf("The COUNTER in received message from server is wrong.\n");
+      printf("ERROR: The COUNTER in received message from server is wrong.\n");
       return -1;
     }
   }
@@ -132,8 +126,6 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
 
 int sent_message_handler(struct session_variables* sessionVariables, peer_t *peer)
 {
-  printf("Ready to send every message in the queue.");
-  
   if(peer->send_buffer == NULL)
     return -1;
 

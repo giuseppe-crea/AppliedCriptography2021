@@ -18,7 +18,10 @@ bool signature(EVP_PKEY* cl_pr_key, unsigned char* pt, unsigned char** sign, int
 
 	// creates the signature context:
 	EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
-	if(!md_ctx){ cerr << "Error: EVP_MD_CTX_new returned NULL\n"; exit(1); }
+	if(!md_ctx){ 
+		cout << "ERROR: EVP_MD_CTX_new returned NULL\n"; 
+		return false;  
+	}
 
 	//allocates the signature
 	int key_size = EVP_PKEY_size(cl_pr_key);
@@ -28,18 +31,22 @@ bool signature(EVP_PKEY* cl_pr_key, unsigned char* pt, unsigned char** sign, int
 	ret = EVP_SignInit(md_ctx, md);
 
 	if(ret == 0){ 
-		cerr << "Error: EVP_SignInit returned " << ret << "\n"; exit(1); 
+		cout << "ERROR: EVP_SignInit returned " << ret << "\n"; 
+		return false; 
 	}
 	ret = EVP_SignUpdate(md_ctx, pt, length);
 
 	if(ret == 0){ 
-		cerr << "Error: EVP_SignUpdate returned " << ret << "\n"; exit(1); 
+		cout << "ERROR: EVP_SignUpdate returned " << ret << "\n"; 
+		return false; 
 	}
 	ret = EVP_SignFinal(md_ctx, signature, &signature_size, cl_pr_key);
 	
 	if(ret == 0){ 
-		cerr << "Error: EVP_SignFinal returned " << ret << "\n"; exit(1); 
+		cout << "ERROR: EVP_SignFinal returned " << ret << "\n"; 
+		return false; 
 	}
+
 	EVP_MD_CTX_free(md_ctx);
 
 	*sign = signature;
@@ -55,14 +62,16 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 
 	// creates the signature context
 	EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
-	if(!md_ctx){ cerr << "Error: EVP_MD_CTX_new returned NULL\n"; exit(1); }
-
-	// TEMP
-	//EVP_MD_CTX_init(md_ctx);
-	// TEMP
+	if(!md_ctx){ 
+		cout << "ERROR: EVP_MD_CTX_new returned NULL\n"; 
+		return false; 
+	}
 
 	ret = EVP_VerifyInit(md_ctx, md);
-	if(ret == 0){ cerr << "Error: EVP_VerifyInit returned " << ret << "\n"; exit(1); }
+	if(ret == 0){ 
+		cout << "Error: EVP_VerifyInit returned " << ret << "\n"; 
+		return false;
+	}
 
 	//verifies the signature
 	int buffer_dim = sizeof(int32_t)+data_dim;
@@ -74,22 +83,28 @@ bool verify_sign(EVP_PKEY* pub_key, unsigned char* data, int n, long data_dim, u
 	memcpy(buffer+data_dim, &n, sizeof(int32_t));
 
 	if(pub_key == NULL){
-		perror("Server public key not imported.");
+		cout << "ERROR: Server public key not imported.\n";
 		free(buffer);
-		exit(-1);
+		return false;
 	}
 
 	//actual signature verification
 	ret = EVP_VerifyUpdate(md_ctx, buffer, buffer_dim);  
-	if(ret == 0){ cerr << "Error: EVP_VerifyUpdate returned " << ret << "\n"; exit(1); }
+	if(ret == 0){ 
+		cout << "ERROR: EVP_VerifyUpdate returned " << ret << "\n"; 
+		return false; 
+	}
+
 	ret = EVP_VerifyFinal(md_ctx, sign, sign_dim, pub_key);
+
 	if(ret == -1){ // it is 0 if invalid signature, -1 if some other error, 1 if success.
-		cerr << "Error: EVP_VerifyFinal returned " << ret << " (invalid signature?)\n";
-		exit(1);
+		cout << "ERROR: EVP_VerifyFinal returned " << ret << " (invalid signature?)\n";
+		return false;
 	}else if(ret == 0){
-		cerr << "Error: Invalid signature!\n";
-		exit(1);
+		cout << "ERROR: Invalid signature!\n";
+		return false;
    	}
+	   
    	EVP_MD_CTX_free(md_ctx);
 	free(buffer);
 	return true;
