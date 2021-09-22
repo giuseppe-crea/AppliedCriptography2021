@@ -113,6 +113,6 @@ void goodbye(struct session_variables* sessionVariables, peer_t* server,int ex){
     close(sessionVariables->sockfd);
     free(sessionVariables);
     delete_peer(server);
-    printf("Goodbye!\n");
+    printf("%sGoodbye!%s\n",ANSI_COLOR_CYAN,ANSI_COLOR_RESET);
     exit(ex);
 }

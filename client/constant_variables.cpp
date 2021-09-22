@@ -8,6 +8,20 @@ using namespace std;
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define ANSI_COLOR_YELLOW "\x1b[33m"
 
+#define ANSI_COLOR_BLACK "\e[0;30m"
+#define ANSI_COLOR_GRAY "\e[1;30m"
+#define ANSI_COLOR_RED "\e[0;31m"
+#define ANSI_COLOR_LIGHT_RED "\e[1;31m"
+#define ANSI_COLOR_GREEN "\e[0;32m"
+#define ANSI_COLOR_LIGHT_GREEN "\e[1;32m"
+#define ANSI_COLOR_BROWN "\e[0;33m"
+#define ANSI_COLOR_LIGHT_BLUE "\e[1;34m"
+#define ANSI_COLOR_PURPLE "\e[0;35m"
+#define ANSI_COLOR_LIGHT_PURPLE "\e[1;35m"
+#define ANSI_COLOR_CYAN "\e[0;36m"
+#define ANSI_COLOR_LIGHT_CYAN "\e[1;36m"
+#define ANSI_COLOR_LIGHT_GRAY "\e[0;37m"
+
 const int first_auth_msg_code = 290;
 const int second_auth_msg_code = 291;
 const int final_auth_msg_code = 292;
