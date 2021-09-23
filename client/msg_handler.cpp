@@ -133,7 +133,7 @@ int sent_message_handler(struct session_variables* sessionVariables, peer_t *pee
   Message* msg;
   while(dequeue(&(peer->send_buffer), &msg) == 0){
     msg->SendMessage(sessionVariables->sockfd, &(sessionVariables->counterAS));
+    delete(msg);
   }
-  delete(msg);
   return 0;
 }

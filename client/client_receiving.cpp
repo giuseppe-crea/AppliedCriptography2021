@@ -607,7 +607,8 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
     printf(ANSI_COLOR_YELLOW);
     printf("%s", buffer);
     printf(ANSI_COLOR_RESET);
-    printf("\n");
+    if(message_dim != MAX_DATA_SIZE-39)
+        printf("\n");
 
     delete(m_from_peer);
 

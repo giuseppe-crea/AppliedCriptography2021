@@ -211,8 +211,11 @@ unsigned char* ClientElement::GetSessionKey(int* len){
 }
 
 int ClientElement::Enqueue_message(Message* message){
-    if(message != NULL)
+    if(message != NULL){
         this->list_pending_messages.push_back(message);
+        if(message->isEncrypted())
+            this->IncreaseCounterTo();
+    }
     else
         return -1;
     return 0;

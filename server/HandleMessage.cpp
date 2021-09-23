@@ -735,6 +735,10 @@ int send_to_peer(ClientElement* user)
     // If sending message has completely sent and there are messages in queue, why not send them?
     if (user->current_sending_byte < 0 || user->current_sending_byte >= user->unsent_bytes) {
       // unsent_buffer was successfully sent, let's free it just to be sure
+      if(user->unsent_buffer != NULL){
+        free(user->unsent_buffer);
+        user->unsent_buffer = NULL;
+      }
       if(to_send != NULL)
         delete(to_send);
       
@@ -748,8 +752,10 @@ int send_to_peer(ClientElement* user)
       // messages were found in the queue, popping one
       // the SendMessage operation allocates the unsent_buffer element within the user object
       len_to_send = to_send->SendMessage(&user->unsent_buffer);
+      /*
       if(to_send->isEncrypted())
         user->IncreaseCounterTo();
+      */
       user->current_sending_byte = 0;
       user->unsent_bytes = len_to_send;
       // at this point we can free the dequeued message
@@ -784,7 +790,7 @@ int send_to_peer(ClientElement* user)
       sent_total += sent_count;
     }
   } while (sent_count > 0);
-  if(sent_total >= len_to_send){
+  if(sent_total >= len_to_send && user->unsent_buffer != NULL){
     free(user->unsent_buffer);
     user->unsent_buffer = NULL;
   }
