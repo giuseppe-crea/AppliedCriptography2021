@@ -282,7 +282,7 @@ int chat_request_handler(Message* message, ClientElement* user){
   data_buffer = (unsigned char* )calloc(data_buf_len, sizeof(unsigned char)); 
   memcpy(data_buffer, user->GetUsername().c_str(), data_buf_len);
   // check if that user exists, if they aren't busy, and if the requesting user isn't busy
-  if(contact != NULL && !contact->isBusy && !user->isBusy){
+  if(contact != NULL && !contact->isBusy && !user->isBusy && strcmp(contact->GetUsername().c_str(), user->GetUsername().c_str()) != 0){
       // everything looks alright, we can forward the chat request
       Message* reply = new Message();
       int32_t ret = 0;
