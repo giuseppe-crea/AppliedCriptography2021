@@ -376,13 +376,12 @@ int chat_request_accepted_handler(Message* message, ClientElement* user){
 
 int chat_request_denied_handler(Message* message, ClientElement* user){
   ClientElement *partner = get_user_by_id(user->GetPartnerName());
+  user->SetPartnerName("");
   if(partner != NULL){
-    user->SetPartnerName("");
     partner->SetPartnerName("");
     quick_message(partner, chat_request_denied_code);
-    return 0;
   }
-  return -1;
+  return 0;
 }
 
 // despite the name, this function allocates a NEW Message object
