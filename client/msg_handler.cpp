@@ -64,12 +64,12 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
       switch(peer->receiving_msg->GetOpCode()){
           case chat_request_received_code:
           if(chat_request_received(data, data_dim, sessionVariables, &m))
-            enqueue(&(peer->send_buffer), m);
+            enqueue(&(peer->send_buffer), m, sessionVariables);
           break;
 
           case chat_request_accept_code: // from server message 4 to alice
           if(chat_request_accepted(data, data_dim, sessionVariables, &m))
-            enqueue(&(peer->send_buffer), m);
+            enqueue(&(peer->send_buffer), m, sessionVariables);
           break;
 
           case chat_request_denied_code:
@@ -82,12 +82,12 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
 
           case nonce_msg_code: // receiving 6
           if(nonce_msg(data, data_dim, sessionVariables, &m))
-            enqueue(&(peer->send_buffer), m);
+            enqueue(&(peer->send_buffer), m, sessionVariables);
           break;
 
           case first_key_negotiation_code: // receiving 8
           if(first_key_negotiation(data, data_dim, sessionVariables, &m))
-            enqueue(&(peer->send_buffer), m);
+            enqueue(&(peer->send_buffer), m, sessionVariables);
           break;
 
           case second_key_negotiation_code: // receiving 10

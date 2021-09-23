@@ -25,10 +25,12 @@ int build_fd_sets(fd_set *read_fds, fd_set* write_fds, fd_set *except_fds, peer_
 
 int read_from_stdin(char *read_buffer, size_t max_len){
     memset(read_buffer, 0, max_len);
-    int read_count;
+    max_len--;
+    int read_count = 1;
     int total_read = 0;
+    unsigned char test;
   
-    do  {
+    while(read_count > 0)  {
         read_count = read(STDIN_FILENO, read_buffer, max_len-total_read);
         if (read_count < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             printf("%sERROR: failed read() from stdin.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
@@ -40,12 +42,12 @@ int read_from_stdin(char *read_buffer, size_t max_len){
         else if (read_count > 0) {
             total_read += read_count;
             if (total_read == max_len) {
-                printf("%sERROR: message has reached the max length. Please try to be shorter next time.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
+                printf("%sPartitioning Message to Send...%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
                 fflush(STDIN_FILENO);
                 break;
             }
         }
-    } while (read_count > 0);
+    }
 
     size_t len = strlen(read_buffer);
     if (len > 0 && read_buffer[len - 1] == '\n')
@@ -104,19 +106,23 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         ret = prepare_msg_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1, &msg);
 
     if(ret)
-        enqueue(&(peer->send_buffer), msg);
+        enqueue(&(peer->send_buffer), msg, sessionVariables);
 }
 
 int handle_read_from_stdin(struct session_variables* sessionVariables, peer_t* peer)
 {
-  char read_buffer[MAX_PAYLOAD_SIZE]; // buffer for stdin
+  char read_buffer[MAX_DATA_SIZE-40]; // buffer for stdin
   int len;
-  len = read_from_stdin(read_buffer, MAX_PAYLOAD_SIZE);
-  if (len <= 0)
+  len = read_from_stdin(read_buffer, MAX_DATA_SIZE-40);
+  if (len == -1){
     return -1;
+  }else if( len == -2 || (len == 1 && (strcmp(read_buffer, "\0") == 0 || strcmp(read_buffer, "\n") == 0))){
+    return -2;
+  }
   
   int buffer_size = strlen(read_buffer);
   // Create new message and send it.
-  prepare_message(sessionVariables, len, read_buffer, peer);
+  if(len > 0)
+    prepare_message(sessionVariables, len, read_buffer, peer);
   return 0;
 }

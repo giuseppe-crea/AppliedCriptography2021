@@ -155,7 +155,7 @@ int main(int argc, char **argv){
             if(sessionVariables->chatting){
               Message* msg = NULL;
               if(prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg))
-                enqueue(&(server.send_buffer),msg);
+                enqueue(&(server.send_buffer),msg, sessionVariables);
               sessionVariables->chatting = false;
               sessionVariables->counterAB = 0;
               sessionVariables->counterBA = 0;

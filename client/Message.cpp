@@ -3,7 +3,8 @@
 using namespace std;
 
 const int32_t STATIC_POSTFIX = 28;
-const int MAX_PAYLOAD_SIZE = 40000;
+const int MAX_DATA_SIZE = 3960;
+const int MAX_PAYLOAD_SIZE = MAX_DATA_SIZE + 40;
 
 Message::Message()
 {   
@@ -71,7 +72,7 @@ int32_t Message::setData(void* buffer, int32_t buffer_dim){
         return 0;
     }
     //data has a maximum size that it can't exceed
-    if(buffer_dim < MAX_PAYLOAD_SIZE){
+    if(buffer_dim <= MAX_PAYLOAD_SIZE){
         fflush(stdout);
         this->data = (unsigned char*)calloc(buffer_dim,sizeof(unsigned char));
         memcpy(this->data, buffer, buffer_dim);
@@ -197,7 +198,7 @@ int32_t Message::SendMessage(int socketID, unsigned int* counter){
     cursor += 12;
     if(send(socketID, buffer, cursor, 0)){
         c++; 
-        *counter = c;
+        //*counter = c;
         free(buffer);
         return 0;
     }else{ 

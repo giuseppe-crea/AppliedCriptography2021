@@ -28,7 +28,7 @@ void delete_message_queue(struct message_queue *queue)
 }
 
 // adds a message to the queue
-int enqueue(struct message_queue **queue, Message* msg)
+int enqueue(struct message_queue **queue, Message* msg, struct session_variables *sessionVariables)
 {
   struct message_queue* iterator;
   iterator = *queue;
@@ -41,6 +41,7 @@ int enqueue(struct message_queue **queue, Message* msg)
 
   next_element->next = NULL;
   next_element->msg = msg;
+  sessionVariables->counterAS++;
   if (*queue == NULL){
     *queue = next_element;
     return 0;
