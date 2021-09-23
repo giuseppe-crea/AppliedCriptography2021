@@ -549,11 +549,10 @@ void closed_chat(struct session_variables* sessionVariables){
 };
 
 //function that handles forced logout from server in case of counters overflow
-void forced_logout(int sockfd){
+void forced_logout(struct session_variables* sessionVariables, peer_t *peer){
     //forces logout and closes socket
-    close(sockfd);
     cout << ANSI_COLOR_LIGHT_RED << "Forced Logout: overflow in counter. If you want to keep chatting, please log in again." << ANSI_COLOR_RESET << endl;
-    exit(-3);
+    goodbye(sessionVariables, peer, -3);
     // terminate execution of thread and main
 };
 
@@ -607,7 +606,7 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
     printf(ANSI_COLOR_YELLOW);
     printf("%s", buffer);
     printf(ANSI_COLOR_RESET);
-    if(message_dim != MAX_DATA_SIZE-39)
+    if(message_dim != MAX_DATA_SIZE + 1)
         printf("\n");
 
     delete(m_from_peer);
