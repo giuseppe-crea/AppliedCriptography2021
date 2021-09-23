@@ -1,6 +1,7 @@
 #include "getKeys.cpp"
 #include "ClientElement.hpp"  
 
+const int MAX_ALLOWED_MESSAGES = INT_MAX;
 
 ClientElement::ClientElement()
 {
@@ -47,7 +48,7 @@ ClientElement::~ClientElement()
 }
 
 bool ClientElement::CounterSizeCheck(){
-    return(counter_to+1 == INT_MAX || counter_from+1 == INT_MAX);
+    return(counter_to+1 == MAX_ALLOWED_MESSAGES || counter_from+1 == MAX_ALLOWED_MESSAGES);
 }
 
 int ClientElement::SetUsername(std::string username){

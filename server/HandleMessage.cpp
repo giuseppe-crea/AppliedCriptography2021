@@ -708,6 +708,10 @@ int receive_from_peer(ClientElement* user)
   free(buffer);
   buffer = NULL;
   if(user->CounterSizeCheck()){
+    if(rcv_msg != NULL){
+      delete(rcv_msg);
+      rcv_msg = NULL;
+    }
     // the user's to or from counter reached INT_MAX(!!) size
     // gotta put them in the timeout box
     Message* reply = new Message();
