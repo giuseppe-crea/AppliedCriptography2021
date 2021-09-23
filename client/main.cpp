@@ -151,7 +151,8 @@ int main(int argc, char **argv){
 
         if (FD_ISSET(sessionVariables->sockfd, &read_fds)) {
           if (received_msg_handler(sessionVariables, &server) != 0){
-            printf("%sERROR: Bad message has been received, if you're in a chatting session, it's going to be closed for safety.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
+            if(!tampered)
+              printf("%sBad message has been received, if you're in a chatting session, it's going to be closed for safety.%s\n",ANSI_COLOR_GRAY,ANSI_COLOR_RESET);
             if(sessionVariables->chatting){
               Message* msg = NULL;
               if(prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg))
@@ -165,7 +166,7 @@ int main(int argc, char **argv){
               sessionVariables->peer_session_key = NULL;
             }
             if(tampered){
-              printf("%sERROR: too many bad messages have been received! Session shutdown.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
+              printf("%sToo many bad messages have been received! The server is down, session shutdown.%s\n",ANSI_COLOR_CYAN,ANSI_COLOR_RESET);
               goodbye(sessionVariables,&server,-1);
             } else tampered = true;
           }

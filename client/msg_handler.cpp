@@ -14,7 +14,6 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
 
   // checks if the starting of a message has been received, otherwise moves on
   if (nbytes < sizeof(int32_t)){
-      printf("ERROR: the received message is incomplete.\n");
       return -2;
   }
     
@@ -99,7 +98,7 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
           break;
 
           case forced_logout_code:
-          forced_logout(sessionVariables->sockfd);
+          forced_logout(sessionVariables, peer);
           break;
 
           case list_code:
