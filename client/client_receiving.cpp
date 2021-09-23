@@ -6,7 +6,7 @@ bool chat_request_received(unsigned char* data, int data_dim, struct session_var
     char* buffer = (char*) calloc(data_dim+1, sizeof(char));
     memcpy(buffer, data, data_dim);
     buffer[data_dim]='\0';
-    cout << "user " << buffer << " wants to chat, type y/n if accepted or denied" << endl;
+    cout << ANSI_COLOR_CYAN << "User " << ANSI_COLOR_YELLOW << buffer << ANSI_COLOR_CYAN << " wants to chat, type y/n if accepted or denied:" << ANSI_COLOR_RESET << endl;
     free(buffer);
     string reply;
     bool invalid_answer = true;
@@ -20,17 +20,17 @@ bool chat_request_received(unsigned char* data, int data_dim, struct session_var
         if (strcmp(reply.c_str(),"y") == 0){         
             invalid_answer = false;
             // message with accepted request gets sent
-            cout << "Starting chat with other user." << endl;
+            cout << ANSI_COLOR_LIGHT_GREEN << "Starting chat with other user." << ANSI_COLOR_RESET << endl;
             ret = prepare_msg_to_server(chat_request_accept_code, sessionVariables, NULL, 0, &msg);
         } 
         // request denied
         else if (strcmp(reply.c_str(),"n") == 0){   
             invalid_answer = false;
             //message with denied request gets sent
-            cout << "Refused to chat with other user." << endl;
+            cout << ANSI_COLOR_LIGHT_RED << "Refused to chat with other user." << ANSI_COLOR_RESET << endl;
             ret = prepare_msg_to_server(chat_request_denied_code, sessionVariables, NULL, 0, &msg);  
         }else if (strcmp(reply.c_str(), "") != 0) 
-            cout << "ERROR: wrong answer. Reply with y/n." << endl;
+            cout << ANSI_COLOR_LIGHT_RED << "Wrong answer: reply with y/n." << ANSI_COLOR_RESET << endl;
     }
 
     if(ret)
@@ -43,13 +43,13 @@ bool chat_request_received(unsigned char* data, int data_dim, struct session_var
 bool chat_request_accepted(unsigned char* data, int data_dim, struct session_variables* sessionVariables, Message** m){
 
     if(sessionVariables->chatting){
-        printf("ERROR: You already have an opened chat!\n"); 
+        printf("%sERROR: You already have an opened chat!%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET); 
         return false;   
     }
     
     //prints out "chat request accepted"
 
-    cout << "Chat request has been accepted" << endl;
+    cout << ANSI_COLOR_LIGHT_GREEN << "Chat request has been accepted" << ANSI_COLOR_RESET << endl;
 
     // sends nonce for peer to server
     RAND_bytes((unsigned char*)&(sessionVariables->na), sizeof(int32_t));
@@ -81,12 +81,12 @@ bool chat_request_accepted(unsigned char* data, int data_dim, struct session_var
 
     if(data_dim != pem_dim+sizeof(long)){
         BIO_free(peer_pub_key_pem);
-        printf("Bad data!!\n");
+        printf("%sBad data!!%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         return false;
     }
     if(pem_dim != rv){
         BIO_free(peer_pub_key_pem);
-        printf("Failed to properly write the BIO.\n");
+        printf("%sFailed to properly write the BIO.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         return false;
     }
 
@@ -101,7 +101,7 @@ bool chat_request_accepted(unsigned char* data, int data_dim, struct session_var
 // function to notify that the chat request has been denied
 void chat_request_denied(){
     //prints out "chat request denied"
-    cout << "Chat request denied. If you want to chat, send another request or accept one." << endl;
+    cout << ANSI_COLOR_LIGHT_RED << "Chat request denied. If you want to chat, send another request or accept one." << ANSI_COLOR_RESET << endl;
 };
 
 // function that handles recieved peer public key: in this case the client waits for the nonce message to proceed in key negotiation
@@ -118,13 +118,13 @@ bool peer_public_key_msg(unsigned char* data, int data_dim, struct session_varia
 
     if(data_dim != pem_dim+sizeof(long)){
         BIO_free(peer_pub_key_pem);
-        printf("ERROR: bad data received.\n");
+        printf("%sERROR: bad data received.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         return false;
     }
 
     if(pem_dim != ret){
         BIO_free(peer_pub_key_pem);
-        printf("ERROR: Failed to properly write the BIO.\n");
+        printf("%sERROR: Failed to properly write the BIO.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         return false;
     }
 
@@ -140,7 +140,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     int32_t nb;
 
     if(data_dim != sizeof(int32_t)){
-        printf("ERROR: bad nonce received.\n");
+        printf("%sERROR: bad nonce received.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         return false;
     }
 
@@ -153,7 +153,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
 
     if(pctx == NULL){
-        printf("ERROR: failed DH_INIZIALIZATION.\n");
+        printf("%sERROR: failed DH_INIZIALIZATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         EVP_PKEY_CTX_free(pctx);
         return false;
     }
@@ -175,7 +175,7 @@ bool nonce_msg(unsigned char* data, int data_dim, struct session_variables* sess
     int ret = PEM_write_bio_PUBKEY(cl_dh_pubkey_pem,sessionVariables->cl_dh_prvkey);
 
     if(ret==0){
-        printf("ERROR: failed PEM_SERIALIZATION.\n");
+        printf("%sERROR: failed PEM_SERIALIZATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         BIO_free(cl_dh_pubkey_pem);
         EVP_PKEY_free(sessionVariables->cl_dh_prvkey);
         sessionVariables->cl_dh_prvkey = NULL;
@@ -261,7 +261,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     read_dim += peer_sign_size;
 
     if(data_dim != read_dim){
-        printf("ERROR: received bad data in diffie-hellmann key exchange process.\n");
+        printf("%sERROR: received bad data in diffie-hellmann key exchange process.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(temp);
         free(peer_sign);
         BIO_free(peer_pem);
@@ -275,7 +275,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
 	BIO_get_mem_data(peer_pem,&peer_pem_buffer);
 
     if(!verify_sign(sessionVariables->peer_public_key, data + sizeof(int32_t)+sizeof(long), sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
-        printf("ERROR: invalid signature in KEY_NEGOTIATION.\n");
+        printf("%sERROR: invalid signature in KEY_NEGOTIATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(temp);
         free(peer_sign);
         BIO_free(peer_pem);
@@ -289,7 +289,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
 
     if(pctx == NULL){
-        printf("ERROR: failed DH_INIZIALIZATION.\n");
+        printf("%sERROR: failed DH_INIZIALIZATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(temp);
         free(peer_sign);
         BIO_free(peer_pem);
@@ -316,7 +316,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     int r_value = PEM_write_bio_PUBKEY(cl_dh_pubkey_pem,cl_dh_prvkey);
 
     if(r_value==0){
-        printf("ERROR: failed PEM_SERIALIZATION.\n");
+        printf("%sERROR: failed PEM_SERIALIZATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(temp);
         free(peer_sign);
         BIO_free(peer_pem);
@@ -336,7 +336,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     unsigned char* cl_sign = NULL;
 	unsigned int cl_sign_size = 0;
     if(!signature(sessionVariables->cl_prvkey, pt, &cl_sign, cl_pem_dim+sizeof(int32_t), &cl_sign_size)){   
-        printf("ERROR: failed to compute signature.\n");
+        printf("%sERROR: failed to compute signature.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(temp);
         free(peer_sign);
         free(pt);
@@ -363,7 +363,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     Message* msg = NULL;
     bool ret = prepare_msg_to_server(second_key_negotiation_code, sessionVariables, buffer, buffer_bytes, &msg);
     if(!ret){
-        printf("ERROR: failed to prepare second key negotiation message.\n");
+        printf("%sERROR: failed to prepare second key negotiation message.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(cl_sign);
         free(buffer);
         free(temp);
@@ -386,7 +386,7 @@ bool first_key_negotiation(unsigned char* data, int data_dim, struct session_var
     ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
 
     if(ret == 0){
-        printf("ERROR: failed KEY_DERIVATION initialization.\n");
+        printf("%sERROR: failed KEY_DERIVATION initialization.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(cl_sign);
         free(buffer);
         free(temp);
@@ -460,7 +460,7 @@ void second_key_negotiation(unsigned char* data, int data_dim, struct session_va
     read_dim += peer_sign_size;
 
     if(data_dim != read_dim){
-        printf("ERROR: received bad second key negotiation message!!\n");
+        printf("%sERROR: received bad second key negotiation message!!%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(peer_sign);
         free(temp);
         BIO_free(peer_pem);
@@ -476,7 +476,7 @@ void second_key_negotiation(unsigned char* data, int data_dim, struct session_va
 	BIO_get_mem_data(peer_pem, &peer_pem_buffer);
 
     if(!verify_sign(sessionVariables->peer_public_key, temp, sessionVariables->na, peer_pem_size, peer_sign, peer_sign_size)){
-        printf("ERROR: invalid signature in KEY_NEGOTIATION.\n");
+        printf("%sERROR: invalid signature in KEY_NEGOTIATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(peer_sign);
         free(temp);
         BIO_free(peer_pem);
@@ -493,7 +493,7 @@ void second_key_negotiation(unsigned char* data, int data_dim, struct session_va
     int32_t ret = EVP_PKEY_derive_set_peer(kd_ctx,peer_dh_pubkey);
 
     if(ret == 0){
-        printf("ERROR: failed KEY_DERIVATION initialization.\n");
+        printf("%sERROR: failed KEY_DERIVATION initialization.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         free(peer_sign);
         free(temp);
         BIO_free(peer_pem);
@@ -545,14 +545,14 @@ void closed_chat(struct session_variables* sessionVariables){
     sessionVariables->peer_public_key = NULL;
     free(sessionVariables->peer_session_key);
     sessionVariables->peer_session_key = NULL;
-    cout << "Your chatting partner has closed the chat. If you want to keep chatting, find another partner." << endl;
+    cout << ANSI_COLOR_LIGHT_RED << "Your chatting partner has closed the chat. If you want to keep chatting, find another partner." << ANSI_COLOR_RESET << endl;
 };
 
 //function that handles forced logout from server in case of counters overflow
 void forced_logout(int sockfd){
     //forces logout and closes socket
     close(sockfd);
-    cout << "Forced Logout: overflow in counter. If you want to keep chatting, please log in again." << endl;
+    cout << ANSI_COLOR_LIGHT_RED << "Forced Logout: overflow in counter. If you want to keep chatting, please log in again." << ANSI_COLOR_RESET << endl;
     exit(-3);
     // terminate execution of thread and main
 };
@@ -560,10 +560,10 @@ void forced_logout(int sockfd){
 // function that handles received list of available users from server
 void list(unsigned char* data, int data_dim){
     if(data_dim == 0){
-        printf("Not available users.\n");
+        printf("%sNot available users.%s\n",ANSI_COLOR_YELLOW,ANSI_COLOR_RESET);
         return;
     }
-    printf("Available users:\n");
+    printf("%sAvailable users:%s\n",ANSI_COLOR_LIGHT_BLUE,ANSI_COLOR_RESET);
     int cursor = 0;
     //prints out the list of available users received from server
     while(cursor < data_dim){
@@ -574,7 +574,7 @@ void list(unsigned char* data, int data_dim){
         buffer = (unsigned char*)calloc(list_length,sizeof(unsigned char));
         memcpy(buffer, data+cursor, list_length);
         cursor += list_length;
-        cout << buffer << endl;
+        cout << ANSI_COLOR_LIGHT_CYAN << buffer << ANSI_COLOR_RESET<< endl;
         free(buffer);
     }
 };

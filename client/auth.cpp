@@ -21,7 +21,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	//sends newly created message with opcode, nonce, and client id
 	int32_t ret = first_m->SendUnencryptedMessage(sockfd);
 	if(ret == -1){
-		printf("ERROR: impossible to send first authentication message.\n");
+		printf("%sERROR: impossible to send first authentication message.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		free(buffer);
 		delete(first_m);
 		exit(-1);
@@ -36,7 +36,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	nbytes = recv(sockfd, &buffer_bytes, sizeof(int32_t), 0);
 
 	if(nbytes != sizeof(int32_t) || buffer_bytes > 0){
-		printf("ERROR: impossible to read the dimension of the second authentication message.\n");
+		printf("%sERROR: impossible to read the dimension of the second authentication message.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		exit(-1);
 	}
 
@@ -44,7 +44,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	nbytes = recv(sockfd, buffer, -buffer_bytes, 0);
 
 	if(nbytes != -buffer_bytes){
-		printf("ERROR: impossible to read the whole second authentication message.\n");
+		printf("%sERROR: impossible to read the whole second authentication message.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		free(buffer);
 		exit(-1);
 	}
@@ -55,7 +55,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 	free(buffer);
 
 	if(second_m->GetOpCode() != second_auth_msg_code){
-		printf("ERROR: the message received is not a second authentication message.\n");
+		printf("%sERROR: the message received is not a second authentication message.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		delete(second_m);
 		exit(-1);
 	}
@@ -121,7 +121,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC,NULL);
 
 			if(pctx == NULL){
-				printf("ERROR: failed DH_INIZIALIZATION.\n");
+				printf("%sERROR: failed DH_INIZIALIZATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 			}
 
 			EVP_PKEY_paramgen_init(pctx);
@@ -142,7 +142,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			int ret = PEM_write_bio_PUBKEY(peer_dh_pubkey_pem,peer_dh_prvkey);
 
 			if(ret==0)
-				printf("ERROR: failed PEM_SERIALIZATION.\n");
+				printf("%sERROR: failed PEM_SERIALIZATION.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 
 			// send the public key in pem format in clear and signed in combination with received nonce 
 			unsigned char* pem_buffer;
@@ -188,7 +188,7 @@ void auth(string cl_id, EVP_PKEY* cl_pr_key, EVP_PKEY* cl_pub_key, int sockfd, u
 			ret = EVP_PKEY_derive_set_peer(kd_ctx,sv_dh_pubkey);
 
 			if(ret == 0){
-				printf("ERROR: failed KEY_DERIVATION initialization.\n");
+				printf("%sERROR: failed KEY_DERIVATION initialization.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 			}
 
 			unsigned char* secret;

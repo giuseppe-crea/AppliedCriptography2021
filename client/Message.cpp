@@ -152,7 +152,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
     unsigned char* pt_buffer = (unsigned char *)calloc(MAX_PAYLOAD_SIZE, sizeof(unsigned char));
     int32_t dataLen = gcm_decrypt(data_buffer, data_size_buffer, NULL, 0, tag_buffer, key, iv_buffer, 12, pt_buffer);
     if(dataLen <= 0){
-        printf("ERROR: received a negative data length.\n");
+        printf("%sERROR: received a negative data length.%s\n","\e[0;31m","\x1b[0m");
         free(pt_buffer);
         free(data_buffer);
         free(tag_buffer);
@@ -172,7 +172,7 @@ int32_t Message::Decode_message(unsigned char* buffer, int32_t buff_len, unsigne
         free(data_buffer);
         free(tag_buffer);
         free(iv_buffer);
-        printf("ERROR: failed in setting data.\n");
+        printf("%sERROR: failed in setting data.%s\n","\e[0;31m","\x1b[0m");
     }
     free(pt_buffer);
     free(data_buffer);

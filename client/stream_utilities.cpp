@@ -31,7 +31,7 @@ int read_from_stdin(char *read_buffer, size_t max_len){
     do  {
         read_count = read(STDIN_FILENO, read_buffer, max_len-total_read);
         if (read_count < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            printf("ERROR: failed read() from stdin.\n");
+            printf("%sERROR: failed read() from stdin.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
             return -1;
         }
         else if (read_count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
@@ -40,7 +40,7 @@ int read_from_stdin(char *read_buffer, size_t max_len){
         else if (read_count > 0) {
             total_read += read_count;
             if (total_read == max_len) {
-                printf("ERROR: message has reached the max length. Please try to be shorter next time.\n");
+                printf("%sERROR: message has reached the max length. Please try to be shorter next time.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
                 fflush(STDIN_FILENO);
                 break;
             }
@@ -70,8 +70,8 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
     if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), list_request_cmd.c_str())==0)
         ret = prepare_msg_to_server(list_request_code, sessionVariables, NULL, 0, &msg);
     else if (!(sessionVariables->chatting) && strcmp(first_word.c_str(), chat_request_cmd.c_str())==0){
-        if(input_buffer.size() < 6)
-            printf("You have to insert an id for a user.\n");
+        if(input_buffer.size() < 7)
+            printf("%sYou have to insert an id for a user.%s\n",ANSI_COLOR_LIGHT_RED,ANSI_COLOR_RESET);
         else{
             string recipient_id;
             stringstream ss;
@@ -79,7 +79,7 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
             ss << recipient;
             ss >> recipient_id;
             ret = prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size(), &msg);
-            cout << "Waiting for user reply!" << endl;
+            cout << ANSI_COLOR_CYAN <<"Waiting for user reply!" << ANSI_COLOR_RESET << endl;
         }
     }
     else if (strcmp(first_word.c_str(), logout_cmd.c_str())==0){
@@ -96,7 +96,7 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         free(sessionVariables->peer_session_key);
         sessionVariables->peer_session_key = NULL;
 
-        cout << "Chat has been closed. Send another command." << endl;
+        cout << ANSI_COLOR_LIGHT_RED << "Chat has been closed. Send another command." << ANSI_COLOR_RESET << endl;
         
     }
     //there is no command, so if chatting is true it's a message for the peer	

@@ -24,27 +24,27 @@ bool prepare_msg_to_server(int32_t opcode, struct session_variables* sessionVari
 
 	// prepare data
     if(m->SetOpCode(opcode) != 0){
-        printf("ERROR: failed setting the opcode in message to be sent.\n");
+        printf("%sERROR: failed setting the opcode in message to be sent.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m);
         return false;
     }
     
     if(m->SetCounter(sessionVariables->counterAS) != 0){
-        printf("ERROR: failed setting the counter in message to be sent.\n");
+        printf("%sERROR: failed setting the counter in message to be sent.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m);
         return false;
     }
 
     if(data!=NULL)
 	    if(m->setData(data,data_dim) != 0){
-            printf("ERROR: failed setting the data in message to be sent.\n");
+            printf("%sERROR: failed setting the data in message to be sent.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
             delete(m);
             return false;
         }
 
     // encrypts and sends  the message
     if(m->Encode_message(sessionVariables->sv_session_key) != 0){
-        printf("ERROR: failed encoding the message to be sent.\n");
+        printf("%sERROR: failed encoding the message to be sent.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m);
         return false;
     }
@@ -60,27 +60,27 @@ bool prepare_msg_to_peer(struct session_variables* sessionVariables,unsigned cha
 
 	// prepare data
     if(m_to_peer->SetOpCode(peer_message_code)!= 0){
-        printf("ERROR: failed setting the opcode in message to be delivered to peer.\n");
+        printf("%sERROR: failed setting the opcode in message to be delivered to peer.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m_to_peer);
         return false;
     }
 
     if(m_to_peer->SetCounter(sessionVariables->counterAB)!= 0){
-        printf("ERROR: failed setting the opcode in message to be delivered to peer.\n");
+        printf("%sERROR: failed setting the opcode in message to be delivered to peer.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m_to_peer);
         return false;
     }
 
     if(data!=NULL)
 	    if(m_to_peer->setData(data,data_dim)!= 0){
-            printf("ERROR: failed encoding the message to be delivered to peer.\n");
+            printf("%sERROR: failed encoding the message to be delivered to peer.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
             delete(m_to_peer);
             return false;
         }
     
     // first encryption with peer key 
     if(m_to_peer->Encode_message(sessionVariables->peer_session_key)!= 0){
-        printf("ERROR: failed encoding the message to be delivered to peer.\n");
+        printf("%sERROR: failed encoding the message to be delivered to peer.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m_to_peer);
         return false;
     }

@@ -15,7 +15,7 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
 	FILE* pem_cl_prvkey = fopen(prvkey_file.c_str(),"r");
 	FILE* pem_cl_pubkey = fopen(pubkey_file.c_str(),"r");
 	if(pem_cl_prvkey==NULL || pem_cl_pubkey == NULL){
-		printf("ERROR: Unavailable keys.");
+		printf("%sERROR: Unavailable keys.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
     return false;
   }
 
@@ -54,16 +54,16 @@ int main(int argc, char **argv){
 	string cl_id = "";
 	string password = "";
 	int server_port = 9034;
-	cout << "Who are you?" << endl;
+	cout << ANSI_COLOR_CYAN <<"Who are you?" << ANSI_COLOR_RESET  << endl;
 	cin >> cl_id;
-	cout << "Please insert password:" << endl;
+	cout << ANSI_COLOR_CYAN << "Please insert password:" << ANSI_COLOR_RESET << endl;
 	cin >> password;
 
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
 	FILE *fp_CA_cert = fopen("keys/ca_cert.pem", "r"); 
 	if(!fp_CA_cert){
-		printf("ERROR: CA certificate pem file not found!\n");
+		printf("%sERROR: CA certificate pem file not found!%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		goodbye(sessionVariables,&server,-1);
 	}
 	X509* CA_cert = PEM_read_X509(fp_CA_cert, NULL, NULL, NULL);
@@ -72,7 +72,7 @@ int main(int argc, char **argv){
 
   //trying to open keys for user using the given password from stdin
 	if(!get_keys(cl_id,password,&sessionVariables->cl_pubkey,&sessionVariables->cl_prvkey)){
-		printf("ERROR: Impossible to fetch keys for the user from pem files.\n");
+		printf("%sERROR: Impossible to fetch keys for the user from pem files%s.\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		goodbye(sessionVariables,&server,-3);;
 	}
 
@@ -81,27 +81,27 @@ int main(int argc, char **argv){
 	server.address.sin_port = htons(server_port);
 
 	if(inet_pton(AF_INET,"127.0.0.1", &server.address.sin_addr)<=0){
-		printf("ERROR: wrong convertion of ip address.\n");
+		printf("%sERROR: wrong convertion of ip address.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		goodbye(sessionVariables,&server,-1);;
 	};
 
-	cout << "Server address is set." << endl;
+	cout << ANSI_COLOR_CYAN <<"Server address is set." << ANSI_COLOR_RESET << endl;
 	sessionVariables->sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sessionVariables->sockfd < 0){
-  	printf("ERROR: failure in opening socket!\n");
+  	printf("%sERROR: failure in opening socket!%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		goodbye(sessionVariables,&server,-1);;
 	}
 
   server.socket = sessionVariables->sockfd;
-	cout << "Socket initialized." << endl;
+	cout << ANSI_COLOR_CYAN << "Socket initialized." << ANSI_COLOR_RESET << endl;
 
 	if (connect(sessionVariables->sockfd,(struct sockaddr *) &server.address,sizeof(server.address)) < 0){
-    printf("ERROR: denied connection to server.\n");
+    printf("%sERROR: denied connection to server.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		goodbye(sessionVariables,&server,-1);;
 	}
 
-	printf(ANSI_COLOR_BLUE "Connected!\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_LIGHT_BLUE "Connected!\n" ANSI_COLOR_RESET);
 
 	//authentication of the client through the auth function
 	auth(cl_id, sessionVariables->cl_prvkey, sessionVariables->cl_pubkey, sessionVariables->sockfd, &(sessionVariables->sv_session_key), store);
@@ -117,7 +117,7 @@ int main(int argc, char **argv){
 
   int maxfd = sessionVariables->sockfd;
 
-  printf("Waiting for server message or stdin input. Please, type text to be sent:\n");
+  printf("%sWaiting for server message or stdin input:%s\n",ANSI_COLOR_CYAN,ANSI_COLOR_RESET);
   bool tampered = false; 
 
   while (1) {
@@ -128,12 +128,12 @@ int main(int argc, char **argv){
     
     switch (activity) {
       case -1:
-        printf("ERROR: failed select().\n");
+        printf("%sERROR: failed select().%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         goodbye(sessionVariables,&server,-1);;
 
       case 0:
         // you should never get here
-        printf("ERROR: select() returns 0.\n");        
+        printf("%sERROR: select() returns 0.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);        
         goodbye(sessionVariables,&server,-1);
 
       default:
@@ -145,13 +145,13 @@ int main(int argc, char **argv){
         }
 
         if (FD_ISSET(STDIN_FILENO, &except_fds)) {
-          printf("ERROR: except_fds for stdin.\n");
+          printf("%sERROR: except_fds for stdin.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
           goodbye(sessionVariables,&server,-1);
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &read_fds)) {
           if (received_msg_handler(sessionVariables, &server) != 0){
-            printf("ERROR: Bad message has been received, if you're in a chatting session, it's going to be closed for safety.\n");
+            printf("%sERROR: Bad message has been received, if you're in a chatting session, it's going to be closed for safety.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
             if(sessionVariables->chatting){
               Message* msg = NULL;
               if(prepare_msg_to_server(end_chat_code, sessionVariables, NULL, 0, &msg))
@@ -165,7 +165,7 @@ int main(int argc, char **argv){
               sessionVariables->peer_session_key = NULL;
             }
             if(tampered){
-              printf("ERROR: too many bad messages have been received! Session shutdown.\n");
+              printf("%sERROR: too many bad messages have been received! Session shutdown.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
               goodbye(sessionVariables,&server,-1);
             } else tampered = true;
           }
@@ -178,7 +178,7 @@ int main(int argc, char **argv){
         }
 
         if (FD_ISSET(sessionVariables->sockfd, &except_fds)) {
-          printf("ERROR: except_fds for server.\n");
+          printf("%sERROR: except_fds for server.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
           goodbye(sessionVariables,&server,-1);
         }
       }
