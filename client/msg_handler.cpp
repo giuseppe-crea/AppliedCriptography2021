@@ -72,7 +72,7 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
           break;
 
           case chat_request_denied_code:
-          chat_request_denied();
+          chat_request_denied(sessionVariables);
           break;
 
           case peer_public_key_msg_code: // from server message 4 to bob

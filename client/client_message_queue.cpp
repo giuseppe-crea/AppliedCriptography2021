@@ -105,6 +105,10 @@ void goodbye(struct session_variables* sessionVariables, peer_t* server,int ex){
     EVP_PKEY_free(sessionVariables->cl_dh_prvkey);
     free(sessionVariables->peer_session_key);
     free(sessionVariables->sv_session_key);
+    if(sessionVariables->peerName != NULL){
+      free(sessionVariables->peerName);
+      sessionVariables->peerName=NULL;
+    }
     sessionVariables->cl_prvkey=NULL;
     sessionVariables->cl_pubkey=NULL;
     sessionVariables->peer_public_key=NULL;

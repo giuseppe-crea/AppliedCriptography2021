@@ -3,6 +3,7 @@
 struct session_variables{
     unsigned char* peer_session_key;
     unsigned char* sv_session_key;
+    char* peerName;
     unsigned int counterAS;
     unsigned int counterSA;
     unsigned int counterBA;
