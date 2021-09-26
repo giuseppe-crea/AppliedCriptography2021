@@ -81,6 +81,10 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
             ss << recipient;
             ss >> recipient_id;
             ret = prepare_msg_to_server(chat_request_code, sessionVariables, (unsigned char*) recipient_id.c_str(), recipient_id.size(), &msg);
+            if (ret == true){
+                sessionVariables->peerName = (char*)calloc(recipient.size(), sizeof(char));
+                memcpy(sessionVariables->peerName, recipient.c_str(), recipient.size());
+            }
             cout << ANSI_COLOR_CYAN <<"Waiting for user reply!" << ANSI_COLOR_RESET << endl;
         }
     }

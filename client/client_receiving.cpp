@@ -3,11 +3,11 @@
 // function to handle message containing the request of a user who wants to chat
 bool chat_request_received(unsigned char* data, int data_dim, struct session_variables* sessionVariables, Message** m){
     //prints out the name of the user who wants to chat
-    char* buffer = (char*) calloc(data_dim+1, sizeof(char));
+    char* buffer = (char*) calloc(data_dim+1, sizeof(char)); // Freed either in case the user declines this chat, or in case the chat ends
     memcpy(buffer, data, data_dim);
     buffer[data_dim]='\0';
     cout << ANSI_COLOR_CYAN << "User " << ANSI_COLOR_YELLOW << buffer << ANSI_COLOR_CYAN << " wants to chat, type y/n if accepted or denied:" << ANSI_COLOR_RESET << endl;
-    free(buffer);
+    // free(buffer);
     string reply;
     bool invalid_answer = true;
     Message* msg = NULL;
@@ -20,6 +20,7 @@ bool chat_request_received(unsigned char* data, int data_dim, struct session_var
         if (strcmp(reply.c_str(),"y") == 0){         
             invalid_answer = false;
             // message with accepted request gets sent
+            sessionVariables->peerName = buffer;
             cout << ANSI_COLOR_LIGHT_GREEN << "Starting chat with other user." << ANSI_COLOR_RESET << endl;
             ret = prepare_msg_to_server(chat_request_accept_code, sessionVariables, NULL, 0, &msg);
         } 
@@ -28,6 +29,7 @@ bool chat_request_received(unsigned char* data, int data_dim, struct session_var
             invalid_answer = false;
             //message with denied request gets sent
             cout << ANSI_COLOR_LIGHT_RED << "Refused to chat with other user." << ANSI_COLOR_RESET << endl;
+            free(buffer);
             ret = prepare_msg_to_server(chat_request_denied_code, sessionVariables, NULL, 0, &msg);  
         }else if (strcmp(reply.c_str(), "") != 0) 
             cout << ANSI_COLOR_LIGHT_RED << "Wrong answer: reply with y/n." << ANSI_COLOR_RESET << endl;
@@ -99,8 +101,12 @@ bool chat_request_accepted(unsigned char* data, int data_dim, struct session_var
 };
 
 // function to notify that the chat request has been denied
-void chat_request_denied(){
+void chat_request_denied(struct session_variables* sessionVariables){
     //prints out "chat request denied"
+    if(sessionVariables->peerName != NULL){
+        free(sessionVariables->peerName);
+        sessionVariables->peerName = NULL;
+    }
     cout << ANSI_COLOR_LIGHT_RED << "Chat request denied. If you want to chat, send another request or accept one." << ANSI_COLOR_RESET << endl;
 };
 
@@ -545,6 +551,10 @@ void closed_chat(struct session_variables* sessionVariables){
     sessionVariables->peer_public_key = NULL;
     free(sessionVariables->peer_session_key);
     sessionVariables->peer_session_key = NULL;
+    if(sessionVariables->peerName != NULL){
+      free(sessionVariables->peerName);
+      sessionVariables->peerName=NULL;
+    }
     cout << ANSI_COLOR_LIGHT_RED << "Your chatting partner has closed the chat. If you want to keep chatting, find another partner." << ANSI_COLOR_RESET << endl;
 };
 
@@ -604,7 +614,7 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
     int32_t buffer_bytes;
     buffer = m_from_peer->getData(&buffer_bytes);
     printf(ANSI_COLOR_YELLOW);
-    printf("%s", buffer);
+    printf("[%s]: %s", sessionVariables->peerName, buffer);
     printf(ANSI_COLOR_RESET);
     if(message_dim != MAX_DATA_SIZE + 1)
         printf("\n");

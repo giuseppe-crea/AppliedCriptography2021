@@ -40,6 +40,7 @@ int main(int argc, char **argv){
   sessionVariables->sockfd = 0;
   sessionVariables->na=0;
   sessionVariables->chatting=false;
+  sessionVariables->peerName = NULL;
   sessionVariables->cl_prvkey=NULL;
   sessionVariables->cl_pubkey=NULL;
   sessionVariables->peer_public_key=NULL;
