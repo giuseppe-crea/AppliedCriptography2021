@@ -604,8 +604,16 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
 
     m_from_peer->Decode_message(message+sizeof(int32_t), total_size, sessionVariables->peer_session_key);
 
-    if(m_from_peer->GetOpCode() != peer_message_code || m_from_peer->GetCounter() != sessionVariables->counterBA){
-        printf("ERROR: wrong opcode or counter in MESSAGE_FROM_PEER.\n");
+    if(m_from_peer->GetCounter() != sessionVariables->counterBA){
+        printf("ERROR: wrong counter in MESSAGE_FROM_PEER.\n");
+        delete(m_from_peer);
+        return;
+    }
+
+    int opcode = m_from_peer->GetOpCode();
+    if(opcode != peer_message_code && opcode != first_file_message_code &&
+        opcode != file_message_code && opcode != last_file_message_code){
+        printf("ERROR: wrong opcode in MESSAGE_FROM_PEER.\n");
         delete(m_from_peer);
         return;
     }
@@ -614,9 +622,15 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
     int32_t buffer_bytes;
     buffer = m_from_peer->getData(&buffer_bytes);
     printf(ANSI_COLOR_YELLOW);
-    printf("[%s]: %s", sessionVariables->peerName, buffer);
+
+    if(opcode == peer_message_code || opcode == first_file_message_code)
+        printf("[%s]: ", sessionVariables->peerName);
+
+    printf(ANSI_COLOR_GRAY);
+    printf("%.*s",buffer_bytes,buffer);
     printf(ANSI_COLOR_RESET);
-    if(message_dim != MAX_DATA_SIZE + 1)
+
+    if(opcode == peer_message_code || opcode == last_file_message_code)
         printf("\n");
 
     delete(m_from_peer);

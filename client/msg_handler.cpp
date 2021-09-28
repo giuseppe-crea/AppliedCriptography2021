@@ -108,6 +108,7 @@ int received_msg_handler(struct session_variables* sessionVariables, peer_t *pee
           case peer_message_code:
           peer_message_received(data, data_dim, sessionVariables);
           break;
+
       }
       delete(peer->receiving_msg);
       peer->receiving_msg = NULL;

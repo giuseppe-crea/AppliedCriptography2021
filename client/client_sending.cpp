@@ -11,6 +11,7 @@ struct session_variables{
     int sockfd;
     int na;
     bool chatting;
+    bool throw_next;
     EVP_PKEY* cl_prvkey;
     EVP_PKEY* cl_pubkey;
     EVP_PKEY* peer_public_key;
@@ -55,12 +56,12 @@ bool prepare_msg_to_server(int32_t opcode, struct session_variables* sessionVari
 }
 
 // function that sends message to peer
-bool prepare_msg_to_peer(struct session_variables* sessionVariables,unsigned char* data, int32_t data_dim, Message** msg){
+bool prepare_msg_to_peer(int opcode,struct session_variables* sessionVariables,unsigned char* data, int32_t data_dim, Message** msg){
 
     Message* m_to_peer = new Message();
 
 	// prepare data
-    if(m_to_peer->SetOpCode(peer_message_code)!= 0){
+    if(m_to_peer->SetOpCode(opcode)!= 0){
         printf("%sERROR: failed setting the opcode in message to be delivered to peer.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
         delete(m_to_peer);
         return false;

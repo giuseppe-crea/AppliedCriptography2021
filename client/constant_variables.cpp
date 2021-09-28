@@ -42,6 +42,9 @@ const int list_request_code = 374;
 const int list_code = 375;
 
 const int peer_message_code = 350;
+const int file_message_code = 351;
+const int last_file_message_code = 352;
+const int first_file_message_code = 353;
 
 // client commands
 
@@ -49,6 +52,7 @@ const string chat_request_cmd = ":chat";
 const string end_chat_cmd = ":close";
 const string logout_cmd = ":logout";
 const string list_request_cmd = ":list";
+const string file_cmd = ":file";
 
 // const for signatures in auth
 const EVP_MD* md = EVP_sha256();

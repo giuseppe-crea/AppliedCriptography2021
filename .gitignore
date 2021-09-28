@@ -13,3 +13,6 @@ server/serverS.out
 shittyExamples/string_test
 shittyExamples/string_test.cpp
 shittyExamples/string_test.out
+client/ciao.txt
+client/input.txt
+server/input.txt

@@ -47,6 +47,7 @@ int main(int argc, char **argv){
   sessionVariables->cl_dh_prvkey=NULL;
   sessionVariables->peer_session_key=NULL;
   sessionVariables->sv_session_key=NULL;
+  sessionVariables->throw_next = false;
   
   peer_t server;
   memset(&server, 0, sizeof(server));

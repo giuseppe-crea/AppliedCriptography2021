@@ -42,9 +42,9 @@ int read_from_stdin(char *read_buffer, size_t max_len){
         else if (read_count > 0) {
             total_read += read_count;
             if (total_read == max_len) {
-                printf("%sPartitioning Message to Send...%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
+                printf("%sMessage too long: send it as a text file using :file command.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
                 fflush(STDIN_FILENO);
-                break;
+                return 0;
             }
         }
     }
@@ -105,9 +105,66 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
         cout << ANSI_COLOR_LIGHT_RED << "Chat has been closed. Send another command." << ANSI_COLOR_RESET << endl;
         
     }
+    else if (sessionVariables->chatting && strcmp(first_word.c_str(), file_cmd.c_str())==0){
+            if(input_buffer.size() < 7)
+                printf("%sYou have to insert the path of a file to be sent to peer.%s\n",ANSI_COLOR_LIGHT_RED,ANSI_COLOR_RESET);
+            else{
+                string path;
+                path = input_buffer.substr(input_buffer.find(' ')+1, input_buffer.size()-input_buffer.find(' '));
+    
+                FILE* input = NULL;
+
+                input = fopen(path.c_str(),"r");
+
+                if(input != NULL){
+                    // get the file size
+                    fseek(input,0,SEEK_END);
+                    long int input_size = ftell(input);
+                    fseek(input,0,SEEK_SET);
+
+                    long int parsed = 0;
+                    unsigned char* input_file_buffer = (unsigned char*)calloc(sizeof(unsigned char),input_size);
+
+                    fread(input_file_buffer,sizeof(unsigned char),input_size,input);
+
+                    if(input_size < MAX_DATA_SIZE - 40){
+                        ret = prepare_msg_to_peer(peer_message_code,sessionVariables,input_file_buffer,input_size,&msg);
+                        if(ret){
+                            enqueue(&(peer->send_buffer), msg, sessionVariables);
+                        }
+                    }
+                    else while(parsed < input_size){
+                        int byte_to_send = 0;
+                        int opcode;
+
+                        if(parsed == 0){
+                            opcode = first_file_message_code;
+                            byte_to_send = MAX_DATA_SIZE - 40;
+                        }
+                        else if(input_size - parsed > MAX_DATA_SIZE - 40){
+                            opcode = file_message_code;
+                            byte_to_send = MAX_DATA_SIZE - 40;
+                        }
+                        else{ 
+                            opcode = last_file_message_code;
+                            byte_to_send = input_size - parsed;
+                        }
+                        
+                        ret = prepare_msg_to_peer(opcode,sessionVariables,input_file_buffer+parsed,byte_to_send,&msg);
+                        if(ret){
+                            parsed += byte_to_send;
+                            enqueue(&(peer->send_buffer), msg, sessionVariables);
+                        } 
+                    }
+                    free(input_file_buffer);
+                    fclose(input);
+                }
+                ret = false;
+            }
+    }
     //there is no command, so if chatting is true it's a message for the peer	
     else if(sessionVariables->chatting)
-        ret = prepare_msg_to_peer(sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size()+1, &msg);
+        ret = prepare_msg_to_peer(peer_message_code,sessionVariables, (unsigned char*)input_buffer.c_str(), input_buffer.size(), &msg);
 
     if(ret)
         enqueue(&(peer->send_buffer), msg, sessionVariables);
@@ -122,11 +179,15 @@ int handle_read_from_stdin(struct session_variables* sessionVariables, peer_t* p
     return -1;
   }else if( len == -2 || (len == 1 && (strcmp(read_buffer, "\0") == 0 || strcmp(read_buffer, "\n") == 0))){
     return -2;
+  } else if (len == 0){
+      sessionVariables->throw_next = true;
   }
   
   int buffer_size = strlen(read_buffer);
   // Create new message and send it.
-  if(len > 0)
+  if(len > 0 && !sessionVariables->throw_next){
     prepare_message(sessionVariables, len, read_buffer, peer);
+  } else if (len!=0)
+        sessionVariables->throw_next = false;
   return 0;
 }
