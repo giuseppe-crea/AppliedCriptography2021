@@ -1,0 +1,96 @@
+C -> S: First_auth_msg_code (290)
+Int32_t -size_tot, int32_t opCode, int32_t nonceC, unsigned char user_id
+
+S -> C: second_auth_msg_code (291)
+Int32_t -size_tot, int32_t opCode, int32_t nonceS, long pem_size, unsigned char pem, int32_t sign_size, unsigned char signature
+
+C -> S: final_auth_msg_code (292)
+Int32_t -size_tot, int32_t opCode, long pem_size, unsigned char pem, unsigned int sign_size, unsigned char signature
+
+C -> S: chat_request_code (301)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, unsigned char data:requested_user}
+
+S -> C: chat_request_received_code (301)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, unsigned char data:requesting_user}
+
+C -> S: chat_request_accept_code (303)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+S -> C: chat_request_accept_code (303)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, long pem_size, unsigned char (pem_size) pem:public_key_partner}
+
+S -> C: peer_public_key_msg_code (307)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, long pem_size, unsigned char (pem_size) pem:public_key_partner}
+
+C -> S: chat_request_denied_code (304)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+S -> C: chat_request_denied_code (304)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+C1 -> S: nonce_msg_code (305)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[(int32_t) nonceC1]}
+
+S -> C2: nonce_msg_code (305)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[int32_t nonceC1]}
+
+C2 -> S: first_key_negotiation_code (308)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[int32_t nonceC2, long pem_size, unsigned char (pem_size) pem, unsigned int sign_size, unsigned char (sign_size) signature]}
+
+S -> C1: first_key_negotiation_code (308)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[int32_t nonceC2, long pem_size, unsigned char (pem_size) pem, unsigned int sign_size, unsigned char (sign_size) signature]}
+
+C1 -> S: second_key_negotiation_code (306)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[long pem_size, unsigned char (pem_size) pem, unsigned int sign_size, unsigned char (sign_size) signature]}
+
+S -> C2: second_key_negotiation_code (306)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[long pem_size, unsigned char (pem_size) pem, unsigned int sign_size, unsigned char (sign_size) signature]}
+
+C -> S: end_chat_code (370)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+S -> C: closed_chat_code (371)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+C -> S: logout_code (372)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+S -> C: forced_logout_code (373)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+C -> S: list_request_code (374)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter}
+
+S -> C: list_code (374)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[list[int32_t username_size, unsigned char (username_size) username]]}
+
+C -> S: peer_message_code (350)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[peer_message]}
+peer_message = Int32_t size_tot, unsigned char ct2, unsigned char (16) tag, unsigned char (12) iv
+ct2 = Ekc{int32_t opCode, int32_t counterC, unsigned char message_data}
+
+S -> C: peer_message_code (350)
+Int32_t size_tot, unsigned char ct, unsigned char (16) tag, unsigned char (12) iv
+ct = Eks{int32_t opCode, int32_t counter, data:[peer_message]}
+peer_message = Int32_t size_tot, unsigned char ct2, unsigned char (16) tag, unsigned char (12) iv
+ct2 = Ekc{int32_t opCode, int32_t counterC, unsigned char message_data}
