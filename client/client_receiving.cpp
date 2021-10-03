@@ -1,3 +1,5 @@
+#include <fstream>
+
 #include "stream_utilities.cpp"
 
 // function to handle message containing the request of a user who wants to chat
@@ -627,11 +629,29 @@ void peer_message_received(unsigned char* message, int32_t message_dim, struct s
         printf("[%s]: ", sessionVariables->peerName);
 
     printf(ANSI_COLOR_GRAY);
-    printf("%.*s",buffer_bytes,buffer);
+    if(opcode == peer_message_code)
+        printf("%.*s",buffer_bytes,buffer);
+    else{
+        // sadly, the stdout has no few problems printing VERY large files
+        // we ovviate this by printing to file.
+        // Sorry
+        std::ofstream outfile;
+        string tmpstr((char*)buffer, buffer_bytes);
+        outfile.open("out.txt", std::ios_base::app); // append instead of overwrite
+        outfile << tmpstr; 
+        //fflush(stdout);
+        outfile.close();
+    }
+
+    // fflush(stdout);
+    
     printf(ANSI_COLOR_RESET);
 
-    if(opcode == peer_message_code || opcode == last_file_message_code)
+    if(opcode == peer_message_code){
         printf("\n");
+    }else if(opcode == last_file_message_code){
+        printf("Received a message file.\n");
+    }
 
     delete(m_from_peer);
 
