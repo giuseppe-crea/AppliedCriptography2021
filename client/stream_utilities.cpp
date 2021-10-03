@@ -25,14 +25,23 @@ int build_fd_sets(fd_set *read_fds, fd_set* write_fds, fd_set *except_fds, peer_
 
 int read_from_stdin(char *read_buffer, size_t max_len){
     memset(read_buffer, 0, max_len);
+    // shrink the buffer size by one to make sure it's null terminated
     max_len--;
     int read_count = 1;
     int total_read = 0;
     unsigned char test;
+    bool throw_next = false;
   
     while(read_count > 0)  {
         read_count = read(STDIN_FILENO, read_buffer, max_len-total_read);
-        if (read_count < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        // this condition will only ever happen if an input of 4096 has been passed
+        // because the kernel buffer size is exactly 4096
+        // what will happen is that the kernel will feed us the first 4096 bytes
+        // also this cannot happen with any read_count but zero
+        if(read_count == 0 && throw_next){
+            return 0;
+        }
+        else if (read_count < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             printf("%sERROR: failed read() from stdin.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
             return -1;
         }
@@ -43,8 +52,7 @@ int read_from_stdin(char *read_buffer, size_t max_len){
             total_read += read_count;
             if (total_read == max_len) {
                 printf("%sMessage too long: send it as a text file using :file command.%s\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
-                fflush(STDIN_FILENO);
-                return 0;
+                throw_next = true;
             }
         }
     }
@@ -172,22 +180,31 @@ void prepare_message(struct session_variables* sessionVariables, int buffer_dim,
 
 int handle_read_from_stdin(struct session_variables* sessionVariables, peer_t* peer)
 {
-  char read_buffer[MAX_DATA_SIZE-40]; // buffer for stdin
+  // this variable handles how much we can read from stdin at once
+  // it's limited by the kernel buffer size of 4096
+  // and requires 1 byte free to null terminate the buffer we are gonna send 
+  // while the kernel limit is 4096, and this buffer is 4097, we can only send 4094 bytes
+  // this is due to both '/n' being appended as last byte, 
+  // and the fact we don't have an easy way to distinguish between inputs of exactly 4095 char, which would be valid
+  // and inputs of over 4095 char, which would be lost by the kernel buffer
+  // to avoid inconsistencies, we delete those too, and the final max size that can be sent via stdin is 4094
+  int max_read_from_stdin = 4097;
+  char read_buffer[max_read_from_stdin]; // buffer for stdin
   int len;
-  len = read_from_stdin(read_buffer, MAX_DATA_SIZE-40);
+  len = read_from_stdin(read_buffer, max_read_from_stdin);
   if (len == -1){
     return -1;
   }else if( len == -2 || (len == 1 && (strcmp(read_buffer, "\0") == 0 || strcmp(read_buffer, "\n") == 0))){
-    return -2;
+    return 0;
   } else if (len == 0){
       sessionVariables->throw_next = true;
-  }
+  } 
   
   int buffer_size = strlen(read_buffer);
   // Create new message and send it.
   if(len > 0 && !sessionVariables->throw_next){
     prepare_message(sessionVariables, len, read_buffer, peer);
-  } else if (len!=0)
+  } else
         sessionVariables->throw_next = false;
   return 0;
 }

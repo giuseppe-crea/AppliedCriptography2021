@@ -3,7 +3,7 @@
 using namespace std;
 
 const int32_t STATIC_POSTFIX = 28;
-const int MAX_DATA_SIZE = 4000;
+const int MAX_DATA_SIZE = 20000;
 const int MAX_PAYLOAD_SIZE = MAX_DATA_SIZE + 40;
 
 Message::Message()
