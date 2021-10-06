@@ -3,7 +3,7 @@
 using namespace std;
 
 // utility to handle the extraction of pub and prv key of identifying user
-bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY** cl_pr_key){
+bool get_keys(string username, EVP_PKEY** cl_pub_key, EVP_PKEY** cl_pr_key){
 	string prefix = "keys/";
     
   string prvkey_suffix = "_prvkey.pem";
@@ -20,8 +20,8 @@ bool get_keys(string username, string password, EVP_PKEY** cl_pub_key, EVP_PKEY*
   }
 
   *cl_pub_key = PEM_read_PUBKEY(pem_cl_pubkey,NULL,NULL,NULL);
-	*cl_pr_key = PEM_read_PrivateKey(pem_cl_prvkey,NULL,NULL,(void*)password.c_str());
-
+	*cl_pr_key = PEM_read_PrivateKey(pem_cl_prvkey,NULL,NULL,NULL);
+  
   fclose(pem_cl_prvkey);
   fclose(pem_cl_pubkey);
 
@@ -58,8 +58,6 @@ int main(int argc, char **argv){
 	int server_port = 9034;
 	cout << ANSI_COLOR_CYAN <<"Who are you?" << ANSI_COLOR_RESET  << endl;
 	cin >> cl_id;
-	cout << ANSI_COLOR_CYAN << "Please insert password:" << ANSI_COLOR_RESET << endl;
-	cin >> password;
 
 	//creates an empty store and a certificate from PEM file, and adds the certificate to the store
 	X509_STORE* store = X509_STORE_new();
@@ -73,7 +71,7 @@ int main(int argc, char **argv){
 	fclose(fp_CA_cert);
 
   //trying to open keys for user using the given password from stdin
-	if(!get_keys(cl_id,password,&sessionVariables->cl_pubkey,&sessionVariables->cl_prvkey)){
+	if(!get_keys(cl_id, &sessionVariables->cl_pubkey,&sessionVariables->cl_prvkey)){
 		printf("%sERROR: Impossible to fetch keys for the user from pem files%s.\n",ANSI_COLOR_RED,ANSI_COLOR_RESET);
 		goodbye(sessionVariables,&server,-3);;
 	}
