@@ -557,6 +557,11 @@ int HandleOpCode(Message* message, ClientElement* user){
       close_client_connection(user);
     break;
     }
+    default:{
+      ret = 0;
+      close_client_connection(user);
+    break;
+    }
   }
   // no matter what, the message object is now useless. Deleting it.
   if(message != NULL)
